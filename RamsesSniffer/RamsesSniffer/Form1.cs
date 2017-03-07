@@ -1213,6 +1213,67 @@ namespace RamsesSniffer
             return vectorList[maxIndex].Divide(maxMagnitude);
         }
 
+        /* Used to find the quaternion that describes the orientation in the velocity direction. */
+        private Vector<double> attitudeFromGPS(Vector<double> velocityDirection)
+        {
+
+            // Normalize the direction vector.
+            velocityDirection = velocityDirection/velocityDirection.L2Norm();
+
+            Vector<double> upVector = Vector<double>.Build.Dense(3);
+            upVector[0] = 1;
+            upVector[1] = 0;
+            upVector[2] = 0;
+
+            // Defining the trace of the rotation matrix
+            double trace = ECEF2body.Trace();
+
+            List<Vector<double>> vectorList = new List<Vector<double>>();
+
+            Vector<double> x0 = Vector<double>.Build.Dense(4);
+            x0[0] = 1 + trace;
+            x0[1] = ECEF2body[1, 2] - ECEF2body[2, 1];
+            x0[2] = ECEF2body[2, 0] - ECEF2body[0, 2];
+            x0[3] = ECEF2body[0, 1] - ECEF2body[1, 0];
+            vectorList.Add(x0);
+
+            Vector<double> x1 = Vector<double>.Build.Dense(4);
+            x1[0] = ECEF2body[1, 2] - ECEF2body[2, 1];
+            x1[1] = 1 + 2 * ECEF2body[0, 0] - trace;
+            x1[2] = ECEF2body[0, 1] + ECEF2body[1, 0];
+            x1[3] = ECEF2body[0, 2] + ECEF2body[2, 0];
+            vectorList.Add(x1);
+
+            Vector<double> x2 = Vector<double>.Build.Dense(4);
+            x2[0] = ECEF2body[2, 0] - ECEF2body[0, 2];
+            x2[1] = ECEF2body[1, 0] + ECEF2body[0, 1];
+            x2[2] = 1 + 2 * ECEF2body[1, 1] - trace;
+            x2[3] = ECEF2body[1, 2] + ECEF2body[2, 1];
+            vectorList.Add(x2);
+
+            Vector<double> x3 = Vector<double>.Build.Dense(4);
+            x3[0] = ECEF2body[0, 1] - ECEF2body[1, 0];
+            x3[1] = ECEF2body[2, 0] + ECEF2body[0, 2];
+            x3[2] = ECEF2body[2, 1] + ECEF2body[1, 2];
+            x3[3] = 1 + 2 * ECEF2body[2, 2] - trace;
+            vectorList.Add(x3);
+
+            int maxIndex = 0;
+            double maxMagnitude = 0;
+
+            for (int i = 0; i < vectorList.Count; i++)
+            {
+                //Console.WriteLine(vectorList[i].ToString());
+                if (vectorList[i].L2Norm() > maxMagnitude)
+                {
+                    maxMagnitude = vectorList[i].L2Norm();
+                    maxIndex = i;
+                }
+            }
+
+            return vectorList[maxIndex].Divide(maxMagnitude);
+        }
+
         /* postData is handles the HTTP request. */
         public static async Task<bool> postData(byte[] data)
         {
