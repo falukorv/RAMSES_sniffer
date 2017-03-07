@@ -22,6 +22,10 @@ namespace RamsesSniffer
 {
     public partial class Form1 : Form
     {
+
+        string testString = "";
+        string TemperatureTest = "";
+
         string RamsesNetworkcardip = "10.101.9.53";
         //string RamsesNetworkcardip = "192.168.1.102";
 
@@ -42,7 +46,17 @@ namespace RamsesSniffer
         private Int64 pkgCounter = 0;
 
         private List<GPSposition> GPSpositionsReceived = new List<GPSposition>();
+        private List<GPS_IIP> GPS_IIP_Received = new List<GPS_IIP>();
         private List<Attitude> AttitudeReceived = new List<Attitude>();
+
+        //Identifiers for different packet types
+        private PacketIdentifier PacketID_GPSpos_Fix = new PacketIdentifier(0x08, 0x20, 0x00, 0x01, "GPS packet with a valid position");
+        private PacketIdentifier PacketID_GPSpos_NoFix = new PacketIdentifier(0x08, 0x20, 0x00, 0x01, "GPS packet without valid position");
+        private PacketIdentifier PacketID_GPSIIP_valid = new PacketIdentifier(0x08, 0x21, 0x00, 0x01, "IIP packet with valid navigation data");
+        private PacketIdentifier PacketID_GPSIIP_invalid = new PacketIdentifier(0x08, 0x21, 0x00, 0x00, "IIP packet without navigation data");
+        private PacketIdentifier PacketID_GCS = new PacketIdentifier(0x08, 0x30, -1, -1, "GCS 50Hz data");
+        private PacketIdentifier PacketID_PCDU = new PacketIdentifier(0x08, 0x0D, 0x00, -1, "PCDU data");
+        private PacketIdentifier PacketID_THERM = new PacketIdentifier(0x08, 0x10, -1, 0x01, "Thermo board data packet");
 
         /*--------------------------------------------------------------------*/
         /*----------------------------Data pusher-----------------------------*/
@@ -120,6 +134,25 @@ namespace RamsesSniffer
         /*--------------------------------------------------------------------*/
         /*--------------------------------------------------------------------*/
 
+        class PacketIdentifier
+        {
+            public byte PacketID = 0;
+            public byte PacketIdAPID = 0;
+            public int SID1 = 0;
+            public int SID2 = 0;
+            public string Description = "";
+
+            public PacketIdentifier(byte PacketID_inp, byte PacketIdAPID_inp, int SID1_inp_KEY4, int SID2_inp_KEY5, string DescriptionStr)
+            {
+                PacketID = PacketID_inp;
+                PacketIdAPID = PacketIdAPID_inp;
+                SID1 = SID1_inp_KEY4;
+                SID2 = SID2_inp_KEY5;
+                Description = DescriptionStr;
+            }
+
+        }
+
         class GPSposition
         {
             public double Longitude = 0;
@@ -137,6 +170,24 @@ namespace RamsesSniffer
                 Time = time;
                 RAWmessage = raw;
                 Satellites = satellites;
+            }
+        }
+
+        class GPS_IIP
+        {
+            public double Longitude = 0;
+            public double Latitude = 0;
+            public string Time = "";
+            public string RAWmessage = "";
+            public double TimeToImpact = 0;
+
+            public GPS_IIP(double longitude, double latitude, string time, string raw, double timeToImpact)
+            {
+                Longitude = longitude;
+                Latitude = latitude;
+                Time = time;
+                RAWmessage = raw;
+                TimeToImpact = timeToImpact;
             }
         }
 
@@ -176,6 +227,53 @@ namespace RamsesSniffer
             comboBox1.SelectedIndex = 0;
 
             //BindUPD();
+        }
+
+        private bool Packetmatch(byte[] buffer, PacketIdentifier PI)
+        {
+            bool result = false;
+            bool SID1ok = false;
+            bool SID2ok = false;
+
+            //Correct ID and APID
+            if (buffer[32] == PI.PacketID && buffer[32 + 1] == PI.PacketIdAPID)
+            {
+                //Check SID1
+                if (PI.SID1 != -1)
+                {
+                    if (buffer[32 + 15] == Convert.ToByte(PI.SID1))
+                    {
+                        SID1ok = true;
+                    }
+                }
+                else
+                {
+                    SID1ok = true;
+                }
+
+                //Check SID2
+                if (PI.SID2 != -1)
+                {
+                    if (buffer[32 + 16] == Convert.ToByte(PI.SID2))
+                    {
+                        SID2ok = true;
+                    }
+                }
+                else
+                {
+                    SID2ok = true;
+                }
+
+                //Passed all checks
+                if (SID1ok && SID2ok)
+                {
+                    result = true;
+                }
+                //Check SID
+
+            }
+
+            return result;
         }
 
         public List<String> net_adapters()
@@ -318,7 +416,7 @@ namespace RamsesSniffer
                 POSNET_udpSock.BeginReceiveFrom(POSNET_buffer, 0, POSNET_buffer.Length, SocketFlags.None, ref newClientEP, DoReceiveFromPosnet, POSNET_udpSock);
                 //}
 
-                message = Encoding.UTF8.GetString(POSNET_buffer);
+                message = System.Text.Encoding.UTF8.GetString(POSNET_buffer);
                 //listBox1.Items.Add("Data");
                 //listBox1.Items.Add(buffer.ToString());
 
@@ -393,12 +491,14 @@ namespace RamsesSniffer
             }
 
             double inputDegrees = Convert.ToDouble(d);
-            double inputMinutes = double.Parse(m, CultureInfo.InvariantCulture);
+            double inputMinutes = double.Parse(m, System.Globalization.CultureInfo.InvariantCulture);
             double latitude = inputDegrees + (inputMinutes / 60) * multiplier;  // 52.632363
 
 
             return latitude;
         }
+
+
 
         private void ProcessRAMSESmessage(byte[] RAMSES_buffer)
         {
@@ -408,84 +508,50 @@ namespace RamsesSniffer
                 //byte[] pattern = Encoding.ASCII.GetBytes("$PASHR");
                 //List<int> PatternsPositions = SearchBytePattern(pattern, RAMSES_buffer);
 
-                //Search for the GPS data
-                byte PacketID = 0x08;
-                byte APID_GPS = 0x20; //MAXUS
-                byte APID_GCS = 0x30; //MAXUS
-
                 double longitud = 0;
                 double latitude = 0;
                 double altitude = 0;
+                string msg = "";
+                string time = "";
 
-                if ((RAMSES_buffer[32] == PacketID && RAMSES_buffer[32 + 1] == APID_GPS)) //GPS data SSID and pattern found. O-states GPS APID = 0d42
+                //If it is a GPS packet with valid position
+                if (Packetmatch(RAMSES_buffer, PacketID_GPSpos_Fix))
                 {
-                    //RAMSES_buffer[32 + 0] //Packet ID
-                    //RAMSES_buffer[32 + 1] //Packet APID
+                    msg = System.Text.Encoding.UTF8.GetString(RAMSES_buffer, (32 + 17), 104);
+                    time = msg.Substring(16, 9);
 
-                    //byte[] messagebyte = RAMSES_buffer.Skip(30).Take(50).
+                    latitude = DDMToDD(msg.Substring(26, 2), msg.Substring(28, 8), msg.Substring(37, 1));
+                    longitud = DDMToDD(msg.Substring(39, 3), msg.Substring(42, 8), msg.Substring(51, 1));
+                    altitude = double.Parse(msg.Substring(53, 10), System.Globalization.CultureInfo.InvariantCulture);
+                    int satellites = Convert.ToInt16(msg.Substring(13, 2));
 
-                    //POS with navigation fix or IIP with valid navigation data. 
-                    if (RAMSES_buffer[32 + 16] == 0x01)
-                    {
+                    DateTime timeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
 
-                        //POS with navigation fix
-                        if (RAMSES_buffer[32 + 5] == 0x75)
-                        {
-                            //If pos message, fetch the coordinates
-                            try
-                            {
+                    GPSposition p = new GPSposition(longitud, latitude, altitude, new JulianDate(timeStamp), msg, satellites);
+                    GPSpositionsReceived.Add(p);
 
-                                string msg = Encoding.UTF8.GetString(RAMSES_buffer, (32 + 17), 104);
-                                string time = msg.Substring(16, 9);
-
-                                latitude = DDMToDD(msg.Substring(26, 2), msg.Substring(28, 8), msg.Substring(37, 1));
-                                longitud = DDMToDD(msg.Substring(39, 3), msg.Substring(42, 8), msg.Substring(51, 1));
-                                altitude = double.Parse(msg.Substring(53, 10), CultureInfo.InvariantCulture);
-                                int satellites = Convert.ToInt16(msg.Substring(13, 2));
-
-                                DateTime timeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
-
-                                GPSposition p = new GPSposition(longitud, latitude, altitude, new JulianDate(timeStamp), msg, satellites);
-                                GPSpositionsReceived.Add(p);
-                                
-                                NewGPSpositionsReceived.Add(p);
-                                PositionTimes.Add(new JulianDate(timeStamp));
-                                listBox1.Items.Add("Number of positions batched: " + NewGPSpositionsReceived.Count.ToString());
-                                listBox1.Items.Add("Number of times batched: " + PositionTimes.Count.ToString());
-
-                            }
-                            catch
-                            {
-
-                            }
-
-                        }
-                        else if (RAMSES_buffer[32 + 5] == 0x48) //IIP with navigation fix
-                        {
-                            //If IIP fetch the IIP coordinates. Calculated Instantenous impact point
-
-
-                        }
-                        else //Error, faulty message
-                        {
-
-                        }
-
-
-                    }
-                    else //No fix or invalid IIP data
-                    {
-
-                    }
-
-
+                    NewGPSpositionsReceived.Add(p);
+                    PositionTimes.Add(new JulianDate(timeStamp));
+                    listBox1.Items.Add("Number of positions batched: " + NewGPSpositionsReceived.Count.ToString());
+                    listBox1.Items.Add("Number of times batched: " + PositionTimes.Count.ToString());
                 }
-                else if ((RAMSES_buffer[32] == PacketID && RAMSES_buffer[32 + 1] == APID_GCS)) //GPS data SSID and pattern found. O-states GPS APID = 0d42
+                else if (Packetmatch(RAMSES_buffer, PacketID_GPSIIP_valid))//IIP packet
                 {
-                    //50Hz data
-                    //Downsample?
 
+                    msg = System.Text.Encoding.UTF8.GetString(RAMSES_buffer, (32 + 17), 59);
+                    time = msg.Substring(11, 9); //Time for IIP calculation
 
+                    latitude = DDMToDD(msg.Substring(23, 2), msg.Substring(25, 7), msg.Substring(33, 1));
+                    longitud = DDMToDD(msg.Substring(35, 3), msg.Substring(38, 7), msg.Substring(46, 1));
+
+                    //Time to impact, seconds
+                    double timeToImpact = double.Parse(msg.Substring(48, 7), System.Globalization.CultureInfo.InvariantCulture);
+
+                    GPS_IIP IIP = new GPS_IIP(longitud, latitude, time, msg, timeToImpact);
+                    GPS_IIP_Received.Add(IIP);
+                }
+                else if (Packetmatch(RAMSES_buffer, PacketID_GCS)) //If it is a GCS packet
+                {
                     byte[] bquaternion0 = new byte[4];
                     byte[] bquaternion1 = new byte[4];
                     byte[] bquaternion2 = new byte[4];
@@ -496,26 +562,69 @@ namespace RamsesSniffer
                     Array.Copy(RAMSES_buffer, 49 + 38, bquaternion2, 0, 4);
                     Array.Copy(RAMSES_buffer, 49 + 42, bquaternion3, 0, 4);
 
-
                     //Do something fancy with the quaternions
-
                     Attitude at = new Attitude(floatConversion(bquaternion0), floatConversion(bquaternion1), floatConversion(bquaternion2), floatConversion(bquaternion3));
                     AttitudeReceived.Add(at);
-                    //float q0 = floatConversion(bquaternion0);
-                    //float q1 = floatConversion(bquaternion1);
-                    //float q2 = floatConversion(bquaternion2);
-                    //float q3 = floatConversion(bquaternion3);
-                    //QuaternionStr = q0.ToString("0.00") + "," + q1.ToString("0.00") + "," + q2.ToString("0.00") + "," + q3.ToString("0.00");
 
                     NewAttitudeReceived.Add(at);
                     AttitudeTimes.Add(new JulianDate(DateTime.Now));
                 }
+                else if (Packetmatch(RAMSES_buffer, PacketID_PCDU)) //If it is a PCDU packet
+                {
+                    var ACCx = (short)(RAMSES_buffer[32 + 105 + 0] << 8 | RAMSES_buffer[32 + 105 + 1]);
+                    var ACCy = (short)(RAMSES_buffer[32 + 107 + 0] << 8 | RAMSES_buffer[32 + 107 + 1]);
+                    var ACCz = (short)(RAMSES_buffer[32 + 109 + 0] << 8 | RAMSES_buffer[32 + 109 + 1]);
+
+                    //Get onboard mission time
+                    byte[] bmissiontime = new byte[4];
+                    Array.Copy(RAMSES_buffer, 32 + 43, bmissiontime, 0, 4);
+                    //float missiontime = BitConverter.ToSingle(bmissiontime, 0);
+
+                    Int32 missiontime = IntegerFromByteArray(bmissiontime); //MAXUS 9 sequence starts at T-300000ms
+
+                    //Get input signals, motor separation etc
+                    byte PIn = RAMSES_buffer[32 + 143];
+                    string SepState = "";
+
+                    //Check motor separation
+                    if (BitIsSet(PIn, 4))
+                    {
+                        SepState = "Motor is separated from payload";
+
+                    }
+                    else
+                    {
+                        SepState = "Motor is attatched to payload";
+                    }
+
+                    testString = ACCx.ToString() + "mG, " + ACCy.ToString() + "mG, " + ACCz.ToString() + "mG" + " " + SepState + ", time:" + missiontime.ToString() + "ms";
+                }
+                else if (Packetmatch(RAMSES_buffer, PacketID_THERM)) //If it is a THERM packet. Extract some temperatures maybe?
+                {
+
+                    var TGVTemp3 = (short)(RAMSES_buffer[32 + 65 + 0] << 8 | RAMSES_buffer[32 + 65 + 1]);
+
+                    //Use a simplified PT-100 curve
+                    double temp = 0.05 * (double)(TGVTemp3 - 5568);
+                    TemperatureTest = temp.ToString("0.0") + "°C";
+
+                }
+
+
             }
             catch
             {
+                listBox1.Items.Add("error!");
                 //RAMSES decompile error
             }
 
+        }
+
+        int IntegerFromByteArray(byte[] data)
+        {
+            //Data saved as little endian
+            Array.Reverse(data);
+            return BitConverter.ToInt32(data, 0);
         }
 
         public float floatConversion(byte[] bytes)
@@ -526,6 +635,12 @@ namespace RamsesSniffer
             }
             float myFloat = BitConverter.ToSingle(bytes, 0);
             return myFloat;
+        }
+
+        public static bool BitIsSet(byte b, int bitNumber)
+        {
+            var bit = (b & (1 << bitNumber - 1)) != 0;
+            return bit;
         }
 
         private void UpdateGUI()
@@ -552,8 +667,23 @@ namespace RamsesSniffer
                 listBox1.Items.Add(AttitudeReceived[AttitudeReceived.Count - 1].ToString());
             }
 
-            //Number of received RAMSES packages
-            label8.Text = "pkg: " + pkgCounter.ToString();
+            try
+            {
+                //Number of received RAMSES packages
+                label8.Text = "pkg: " + pkgCounter.ToString();
+            }
+            catch (Exception)
+            {
+
+            }
+
+
+            if (GPS_IIP_Received.Count > 0)
+            {
+                label10.Text = "GPS IIP: " + GPS_IIP_Received.Count.ToString() + ", " + GPS_IIP_Received[GPS_IIP_Received.Count - 1].Time.ToString();
+            }
+
+            label9.Text = testString + ", " + TemperatureTest;
 
             //Selects the last item in list
             if (listBox1.Items.Count > 0)
@@ -577,7 +707,6 @@ namespace RamsesSniffer
             BindUPD();
 
             // Initialize the data push:
-
             pushInitialPacket();
 
             pushTimer = new System.Timers.Timer();
@@ -588,6 +717,7 @@ namespace RamsesSniffer
             pushTimer.Start();
         }
 
+        /* Pushing the initial packet to the server. */
         private void pushInitialPacket()
         {
             output.PrettyFormatting = true;
@@ -636,6 +766,7 @@ namespace RamsesSniffer
             sw.Close();
         }
 
+        /* onPushedEvent handles the pushing of data to the server. Pushes should not be more frequent than 2 Hz. */
         private void onPushEvent(object sender, System.Timers.ElapsedEventArgs e)
         {
             listBox1.Items.Add("A new data push was initialized");
@@ -916,6 +1047,7 @@ namespace RamsesSniffer
             }
         }
 
+        /* When no packets are received, just ping the server to make sure that the connection is maintained. */
         private void pingServer()
         {
             // Resetting the stringwriter
@@ -950,22 +1082,27 @@ namespace RamsesSniffer
             sw.Close();
         }
 
-        private double timeString2seconds(string missionTime) {
+        /* Converting a time string of the format "+-hh;mm;ss" to seconds. */
+        private double timeString2seconds(string missionTime)
+        {
             string plusminus = missionTime.Substring(0, 1);
             string hourString = missionTime.Substring(1, 2);
             string minuteString = missionTime.Substring(4, 2);
             string secondString = missionTime.Substring(7, 2);
 
-            double seconds = Convert.ToDouble(hourString)*3600 + Convert.ToDouble(minuteString)*60 + Convert.ToDouble(secondString);
+            double seconds = Convert.ToDouble(hourString) * 3600 + Convert.ToDouble(minuteString) * 60 + Convert.ToDouble(secondString);
 
-            if (plusminus == "+"){
+            if (plusminus == "+")
+            {
                 return seconds;
             }
-            else {
+            else
+            {
                 return -seconds;
             }
         }
 
+        /* Transforming the Topocentric Horizon reference system to the Earth Centered, Earth Fixed system. */
         private UnitQuaternion TH2ECEF(double q0, double q1, double q2, double q3)
         {
             // Defining the different matrices
@@ -1023,6 +1160,7 @@ namespace RamsesSniffer
             return new UnitQuaternion(quaternionVector[0], quaternionVector[1], quaternionVector[2], quaternionVector[3]);
         }
 
+        /* The Markley method converts a DCM to quaternions while maintaining orthonormality. */
         private Vector<double> markley(Matrix<double> ECEF2body)
         {
 
@@ -1075,7 +1213,7 @@ namespace RamsesSniffer
             return vectorList[maxIndex].Divide(maxMagnitude);
         }
 
-        /* postData is handles the HTTP request */
+        /* postData is handles the HTTP request. */
         public static async Task<bool> postData(byte[] data)
         {
             // Convert data to a type that httpClient can handle
@@ -1093,11 +1231,6 @@ namespace RamsesSniffer
                 Console.WriteLine("postData failed to send data to the server");
                 return false;
             }
-        }
-
-        private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
-        {
-
         }
     }
 }
