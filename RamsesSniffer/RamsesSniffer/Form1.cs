@@ -61,6 +61,13 @@ namespace RamsesSniffer
         /*--------------------------------------------------------------------*/
         /*----------------------------Data pusher-----------------------------*/
 
+        // WGS ellipsoid data
+        private double eccentricity = 0.081819190842622;
+        private double semiMajorAxis = 6378137;
+        private Vector<double> xAxis = Vector<double>.Build.DenseOfArray(new double[3] { 1, 0, 0 });
+        private Vector<double> yAxis = Vector<double>.Build.DenseOfArray(new double[3] { 0, 1, 0 });
+        private Vector<double> zAxis = Vector<double>.Build.DenseOfArray(new double[3] { 0, 0, 1 });
+
         private List<GPSposition> NewGPSpositionsReceived = new List<GPSposition>();
         private List<JulianDate> PositionTimes = new List<JulianDate>();
         private List<Attitude> NewAttitudeReceived = new List<Attitude>();
@@ -89,11 +96,11 @@ namespace RamsesSniffer
         private PacketCesiumWriter packet;
 
         // Properties of interest
-        private double time;
-        private double speed;
-        private double latitude;
-        private double longitude;
-        private double altitude;
+        //private double time;
+        //private double speed;
+        private double initialLatitude; // Latitude of the topocentric horizon system
+        private double initialLongitude; // Longitude of the topocentric horizon system
+        //private double altitude;
         private double yaw;
         private double pitch;
         private double roll;
@@ -545,7 +552,7 @@ namespace RamsesSniffer
                     longitud = DDMToDD(msg.Substring(35, 3), msg.Substring(38, 7), msg.Substring(46, 1));
 
                     //Time to impact, seconds
-                    double timeToImpact = double.Parse(msg.Substring(48, 7), System.Globalization.CultureInfo.InvariantCulture);
+                    double timeToImpact = double.Parse(msg.Substring(48, 7), CultureInfo.InvariantCulture);
 
                     GPS_IIP IIP = new GPS_IIP(longitud, latitude, time, msg, timeToImpact);
                     GPS_IIP_Received.Add(IIP);
@@ -985,7 +992,18 @@ namespace RamsesSniffer
                 // pixelSize will correspond to the speed
                 dates.Add(new JulianDate(DateTime.Now));
                 speeds.Add(0);
-                speed = 10;
+                double speed;
+                if (NewGPSpositionsReceived.Count > 1)
+                {
+                    Vector<double> firstSamplePos = GPS2cartesian(NewGPSpositionsReceived[0].Longitude, NewGPSpositionsReceived[0].Latitude, NewGPSpositionsReceived[0].Altitude);
+                    Vector<double> lastSamplePos = GPS2cartesian(NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Longitude, NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Latitude, NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Altitude);
+                    speed = positions2speed(firstSamplePos, lastSamplePos, NewGPSpositionsReceived[0].Time, NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Time);
+                }
+                else {
+                    Vector<double> firstSamplePos = GPS2cartesian(NewGPSpositionsReceived[0].Longitude, NewGPSpositionsReceived[0].Latitude, NewGPSpositionsReceived[0].Altitude);
+                    Vector<double> secondPos = GPS2cartesian(GPSpositionsReceived[GPSpositionsReceived.Count - 1].Longitude, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Latitude, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Altitude);
+                    speed = positions2speed(firstSamplePos, secondPos, NewGPSpositionsReceived[0].Time, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Time);
+                }
                 point.WritePixelSizeProperty(speed);
                 // outlineWidth will correspond to the time (for now)
                 point.WriteOutlineWidthProperty(missionSeconds);
@@ -1132,11 +1150,11 @@ namespace RamsesSniffer
             qDMC[2, 2] = Math.Pow(q0, 2) - Math.Pow(q1, 2) - Math.Pow(q2, 2) + Math.Pow(q3, 2);
 
             // Defining cos and sin of the longitude and latitude
-            double cLong = Math.Cos(deg2rad * longitude);
-            double sLong = Math.Sin(deg2rad * longitude);
+            double cLong = Math.Cos(deg2rad * initialLongitude);
+            double sLong = Math.Sin(deg2rad * initialLongitude);
 
-            double cLat = Math.Cos(deg2rad * latitude);
-            double sLat = Math.Sin(deg2rad * latitude);
+            double cLat = Math.Cos(deg2rad * initialLatitude);
+            double sLat = Math.Sin(deg2rad * initialLatitude);
 
             //// Constructing the DCM from ECEF to TH
             ECEF2TH[0, 0] = cLong * cLat;
@@ -1213,65 +1231,123 @@ namespace RamsesSniffer
             return vectorList[maxIndex].Divide(maxMagnitude);
         }
 
-        /* Used to find the quaternion that describes the orientation in the velocity direction. */
-        private Vector<double> attitudeFromGPS(Vector<double> velocityDirection)
+        /*  */
+        private Vector<double> GPS2cartesian(double longitude, double latitude, double height) {
+            // Empty vector to store the results in
+            Vector<double> cartesianPos = Vector<double>.Build.Dense(3);
+
+            // Radius of the curvature in the prime vertical
+            double N = semiMajorAxis / (1 - Math.Pow(eccentricity * Math.Sin(latitude * deg2rad),2));
+
+            // X
+            cartesianPos[0] = (N + height) * Math.Cos(latitude * deg2rad) * Math.Cos(longitude * deg2rad);
+            // Y
+            cartesianPos[1] = (N + height) * Math.Cos(latitude * deg2rad) * Math.Sin(longitude * deg2rad);
+            // Z
+            cartesianPos[2] = ((1 - Math.Pow(eccentricity, 2)) * N + height) * Math.Sin(latitude * deg2rad);
+
+            return cartesianPos;
+        } 
+
+        private double positions2speed(Vector<double> firstPos, Vector<double> secondPos, JulianDate firstTime, JulianDate secondTime) {
+            Vector<double> posDiff = secondPos - firstPos;
+            double timeDiff = secondTime.SecondsDifference(firstTime);
+
+            // Calculating the velocity
+            Vector<double> velocity = posDiff.Divide(timeDiff);
+
+            // Returning the speed, which is the L2 norm of the velocity
+            return velocity.L2Norm();
+        }
+
+        // Finds an orthogonal vector
+        Vector<double> orthogonal(Vector<double> v)
         {
+            double x = Math.Abs(v[0]);
+            double y = Math.Abs(v[1]);
+            double z = Math.Abs(v[2]);
 
-            // Normalize the direction vector.
-            velocityDirection = velocityDirection/velocityDirection.L2Norm();
+            Vector<double> other = x < y ? (x < z ? xAxis : zAxis) : (y < z ? yAxis : zAxis);
+            return crossProduct(v, other);
+        }
 
-            Vector<double> upVector = Vector<double>.Build.Dense(3);
-            upVector[0] = 1;
-            upVector[1] = 0;
-            upVector[2] = 0;
+        // For some reason, MathDotNET has not implemented a cross product yet, so this is a temporary fix.
+        Vector<double> crossProduct(Vector<double> v1, Vector<double> v2)
+        {
+            Vector<double> resultVector = Vector<double>.Build.Dense(3);
+            resultVector[0] = v1[1] * v2[2] - v2[1] * v1[2];
+            resultVector[1] = v1[2] * v2[0] - v2[2] * v1[0];
+            resultVector[2] = v1[0] * v2[1] - v2[0] * v1[1];
 
-            // Defining the trace of the rotation matrix
-            double trace = ECEF2body.Trace();
+            return resultVector;
+        }
 
-            List<Vector<double>> vectorList = new List<Vector<double>>();
+        /* Used to find the quaternion that describes the orientation in the velocity direction. */
+        private List<Vector<double>> attitudeFromGPS(List<GPSposition> GPSposList)
+        {
+            Vector<double> currentPosition = Vector<double>.Build.Dense(3);
+            Vector<double> previousPosition;
 
-            Vector<double> x0 = Vector<double>.Build.Dense(4);
-            x0[0] = 1 + trace;
-            x0[1] = ECEF2body[1, 2] - ECEF2body[2, 1];
-            x0[2] = ECEF2body[2, 0] - ECEF2body[0, 2];
-            x0[3] = ECEF2body[0, 1] - ECEF2body[1, 0];
-            vectorList.Add(x0);
+            List<Vector<double>> resultsList = new List<Vector<double>>();
 
-            Vector<double> x1 = Vector<double>.Build.Dense(4);
-            x1[0] = ECEF2body[1, 2] - ECEF2body[2, 1];
-            x1[1] = 1 + 2 * ECEF2body[0, 0] - trace;
-            x1[2] = ECEF2body[0, 1] + ECEF2body[1, 0];
-            x1[3] = ECEF2body[0, 2] + ECEF2body[2, 0];
-            vectorList.Add(x1);
+            Vector<double> xVector = Vector<double>.Build.Dense(3);
+            xVector[0] = 1;
+            xVector[1] = 0;
+            xVector[2] = 0;
 
-            Vector<double> x2 = Vector<double>.Build.Dense(4);
-            x2[0] = ECEF2body[2, 0] - ECEF2body[0, 2];
-            x2[1] = ECEF2body[1, 0] + ECEF2body[0, 1];
-            x2[2] = 1 + 2 * ECEF2body[1, 1] - trace;
-            x2[3] = ECEF2body[1, 2] + ECEF2body[2, 1];
-            vectorList.Add(x2);
+            Vector<double> quat = Vector<double>.Build.Dense(4);
 
-            Vector<double> x3 = Vector<double>.Build.Dense(4);
-            x3[0] = ECEF2body[0, 1] - ECEF2body[1, 0];
-            x3[1] = ECEF2body[2, 0] + ECEF2body[0, 2];
-            x3[2] = ECEF2body[2, 1] + ECEF2body[1, 2];
-            x3[3] = 1 + 2 * ECEF2body[2, 2] - trace;
-            vectorList.Add(x3);
-
-            int maxIndex = 0;
-            double maxMagnitude = 0;
-
-            for (int i = 0; i < vectorList.Count; i++)
+            for (int i = 0; i < GPSposList.Count; i++)
             {
-                //Console.WriteLine(vectorList[i].ToString());
-                if (vectorList[i].L2Norm() > maxMagnitude)
+                Vector<double> tempQuat = Vector<double>.Build.Dense(4);
+                if (i == 0)
                 {
-                    maxMagnitude = vectorList[i].L2Norm();
-                    maxIndex = i;
+                    previousPosition = GPS2cartesian(GPSpositionsReceived[GPSpositionsReceived.Count - 1].Longitude, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Latitude, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Altitude);
                 }
+                else
+                {
+                    previousPosition = currentPosition;
+                }
+                currentPosition = GPS2cartesian(GPSposList[i].Longitude, GPSposList[i].Latitude, GPSposList[i].Altitude);
+
+                // If the speed is almost zero, do not update the attitude
+                if ((currentPosition - previousPosition).L2Norm() < 0.000001)
+                {
+                    continue;
+                }
+
+                // Finding the direction of flight, and normalizing it with respect to the L2-norm
+                Vector<double> directionOfFlight = (currentPosition - previousPosition).Normalize(2);
+
+                // Special case for when the direction of flight is anti-paralell to the x-vector
+                if (directionOfFlight == -xVector)
+                {
+                    // In this case, the rotation can be described by a 180 degrees rotation around any axis that is orthogonal to directionOfFlight
+                    tempQuat[0] = 0;
+
+                    Vector<double> subQuat = orthogonal(directionOfFlight);
+                    tempQuat[1] = subQuat[0];
+                    tempQuat[2] = subQuat[1];
+                    tempQuat[3] = subQuat[2];
+                }
+                else
+                {
+                    // Creating a unit vector that is located halfway inbetween the two vectors
+                    Vector<double> halfVector = (directionOfFlight + xVector).Normalize(2);
+
+                    tempQuat[0] = directionOfFlight.DotProduct(halfVector);
+
+                    Vector<double> subQuat = crossProduct(directionOfFlight, halfVector);
+                    tempQuat[1] = subQuat[0];
+                    tempQuat[2] = subQuat[1];
+                    tempQuat[3] = subQuat[2];
+                }
+
+                resultsList.Add(tempQuat);
+
             }
 
-            return vectorList[maxIndex].Divide(maxMagnitude);
+            return resultsList;
         }
 
         /* postData is handles the HTTP request. */
