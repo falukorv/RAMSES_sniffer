@@ -74,6 +74,8 @@ namespace RamsesSniffer
         private List<JulianDate> PositionTimes = new List<JulianDate>();
         private List<Attitude> NewAttitudeReceived = new List<Attitude>();
         private List<JulianDate> AttitudeTimes = new List<JulianDate>();
+        private List<GLoads> NewGLoadsReceived = new List<GLoads>();
+        private List<AngularRates> NewARatesReceived = new List<AngularRates>();
 
         // Check if mission time goes from minus to plus
         string plusminusTime = "-";
@@ -82,8 +84,8 @@ namespace RamsesSniffer
         private bool GPSUpdated;
         private bool attitudeUpdated;
         private bool speedUpdated;
-        private bool angularRatesAvailable;
-        private bool gLoadsAvailable;
+        private bool aRatesUpdated;
+        private bool gLoadsUpdated;
         private bool eventStringUpdated;
         private bool impactPointUpdated;
 
@@ -167,6 +169,9 @@ namespace RamsesSniffer
         private Random rand;
         private StreamReader CSVreader = new StreamReader(File.OpenRead(@"C:\Users\Johan\Dropbox\Exjobb\EX200 - Development\DataSender\VSB-predicted-flight.csv"));
         private int linecounter = 0;
+        System.Timers.Timer testTimer;
+
+        private string[] modes = new string[2] { "Live mode", "Test mode" };
 
 
         class PacketIdentifier
@@ -296,7 +301,13 @@ namespace RamsesSniffer
             {
                 comboBox1.Items.Add(s);
             }
+
+            foreach (string s in modes) {
+                comboBox2.Items.Add(s);
+            }
+
             comboBox1.SelectedIndex = 0;
+            comboBox2.SelectedIndex = 0;
 
             //BindUPD();
         }
@@ -635,7 +646,7 @@ namespace RamsesSniffer
 
                     //Do something fancy with the quaternions
                     Attitude at = new Attitude(floatConversion(bquaternion0), floatConversion(bquaternion1), floatConversion(bquaternion2), floatConversion(bquaternion3));
-                    
+
 
                     NewAttitudeReceived.Add(at);
                     AttitudeTimes.Add(new JulianDate(DateTime.Now));
@@ -670,8 +681,8 @@ namespace RamsesSniffer
 
                     testString = ACCx.ToString() + "mG, " + ACCy.ToString() + "mG, " + ACCz.ToString() + "mG" + " " + SepState + ", time:" + missiontime.ToString() + "ms";
 
-                    GLoadsReceived.Add(new GLoads(ACCx, ACCy, ACCz)); //What are the units?
-                    gLoadsAvailable = true;
+                    NewGLoadsReceived.Add(new GLoads(ACCx, ACCy, ACCz)); //What are the units?
+
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_THERM)) //If it is a THERM packet. Extract some temperatures maybe?
                 {
@@ -778,23 +789,29 @@ namespace RamsesSniffer
 
         private void button1_Click(object sender, EventArgs e)
         {
-            BindUPD();
+            if (comboBox2.SelectedIndex == 0)
+            {
+                BindUPD();
+            }
+            else if (comboBox2.SelectedIndex == 1)
+            {
+                rand = new Random();
+                testTimer = new System.Timers.Timer();
+                testTimer.Elapsed += new System.Timers.ElapsedEventHandler(onTestEvent);
+                testTimer.Interval = 100;
+                testTimer.Enabled = true;
+                testTimer.AutoReset = true;
+                testTimer.Start();
+            }
 
             // Initialize the data push:
             pushInitialPacket();
 
-
-            rand = new Random();
-            System.Timers.Timer testTimer = new System.Timers.Timer();
-            testTimer.Elapsed += new System.Timers.ElapsedEventHandler(onTestEvent);
-            testTimer.Interval = 100;
-            testTimer.Enabled = true;
-            testTimer.AutoReset = true;
-            testTimer.Start();
+            // If test mode is chosen
 
             pushTimer = new System.Timers.Timer();
             pushTimer.Elapsed += new System.Timers.ElapsedEventHandler(onPushEvent);
-            pushTimer.Interval = 2000;
+            pushTimer.Interval = 1000/pushFrequency;
             pushTimer.Enabled = true;
             pushTimer.AutoReset = true;
             pushTimer.Start();
@@ -811,17 +828,18 @@ namespace RamsesSniffer
             {
                 var line = CSVreader.ReadLine();
                 var values = line.Split(';');
-                
+
                 //time = Convert.ToDouble(values[0]);
                 //speed = Convert.ToDouble(values[4]);
                 testLong = Convert.ToDouble(values[16]);
                 testLat = Convert.ToDouble(values[17]);
-                testAlt = Convert.ToDouble(values[39])*1000;
+                testAlt = Convert.ToDouble(values[39]) * 1000;
                 //yaw = Convert.ToDouble(values[46]);
                 //pitch = Convert.ToDouble(values[45]);
                 //roll = Convert.ToDouble(values[44]);
-                if (testGPS)
+                if (GPSTestCheckBox.Checked)
                 {
+                    listBox1.Items.Add("Testing GPS");
                     DateTime timeStamp = DateTime.Now;
 
                     //testLong += rand.NextDouble() * 0.00001;
@@ -831,44 +849,61 @@ namespace RamsesSniffer
                     //GPSpositionsReceived.Add(p);
 
                     NewGPSpositionsReceived.Add(p);
-
-                    double secondsSince = linecounter * 0.1;
-
-                    double minutes = Math.Floor(secondsSince / 60);
-                    double seconds = Math.Floor(secondsSince % 60);
-                    string secondsString;
-                    string minutesString;
-
-                    if (seconds < 10)
-                    {
-                        secondsString = "0" + seconds.ToString();
-                    }
-                    else {
-                        secondsString = seconds.ToString();
-                    }
-
-                    if (minutes < 10)
-                    {
-                        minutesString = "0" + minutes.ToString();
-                    }
-                    else
-                    {
-                        minutesString = minutes.ToString();
-                    }
-
-                    RTtimestr = "+00:"+minutesString+":"+secondsString;
                 }
 
-                if (testGLoads)
+                if (attitudeTestCheckBox.Checked)
+                {
+                    Vector<double> testQuat = Vector<double>.Build.Dense(4);
+
+                    testQuat[0] = rand.NextDouble();
+                    testQuat[1] = rand.NextDouble();
+                    testQuat[2] = rand.NextDouble();
+                    testQuat[3] = rand.NextDouble();
+
+                    testQuat = testQuat.Normalize(2);
+
+                    NewAttitudeReceived.Add(new Attitude((float)testQuat[0], (float)testQuat[1], (float)testQuat[2], (float)testQuat[3]));
+                    AttitudeTimes.Add(new JulianDate(DateTime.Now));
+                }
+
+
+                if (gLoadTestCheckBox.Checked)
                 {
                     GLoads gLoads = new GLoads(float.Parse(values[41]), float.Parse(values[42]), float.Parse(values[43]));
-                    GLoadsReceived.Add(gLoads);
+                    NewGLoadsReceived.Add(gLoads);
                 }
 
-                if (testAngularRates) {
-                    testARates = new AngularRates((float)rand.NextDouble()*100, (float)rand.NextDouble() * 100, (float)rand.NextDouble() * 100);
-                    ARatesReceived.Add(testARates);
+                if (aRateTestCheckBox.Checked) {
+                    testARates = new AngularRates((float)rand.NextDouble() * 100, (float)rand.NextDouble() * 100, (float)rand.NextDouble() * 100);
+                    NewARatesReceived.Add(testARates);
                 }
+
+                double secondsSince = linecounter * 0.1;
+
+                double minutes = Math.Floor(secondsSince / 60);
+                double seconds = Math.Floor(secondsSince % 60);
+                string secondsString;
+                string minutesString;
+
+                if (seconds < 10)
+                {
+                    secondsString = "0" + seconds.ToString();
+                }
+                else
+                {
+                    secondsString = seconds.ToString();
+                }
+
+                if (minutes < 10)
+                {
+                    minutesString = "0" + minutes.ToString();
+                }
+                else
+                {
+                    minutesString = minutes.ToString();
+                }
+
+                RTtimestr = "+00:" + minutesString + ":" + secondsString;
 
                 linecounter++;
                 //NewDataFlag = true;
@@ -929,7 +964,7 @@ namespace RamsesSniffer
             sw.Close();
         }
 
-        
+
 
         /* onPushedEvent handles the pushing of data to the server. Pushes should not be more frequent than 2 Hz. */
         private void onPushEvent(object sender, System.Timers.ElapsedEventArgs e)
@@ -940,6 +975,7 @@ namespace RamsesSniffer
             if (NewGPSpositionsReceived.Count > 0)
             {
                 GPSUpdated = true;
+                listBox1.Items.Add("GPS updated");
             }
             else {
                 GPSUpdated = false;
@@ -948,94 +984,137 @@ namespace RamsesSniffer
             if (NewAttitudeReceived.Count > 0)
             {
                 attitudeUpdated = true;
+                listBox1.Items.Add("Attitude updated");
             }
             else
             {
                 attitudeUpdated = false;
             }
 
-            if (GLoadsReceived.Count > 0)
+            if (NewGLoadsReceived.Count > 0)
             {
-                gLoadsAvailable = true;
+                gLoadsUpdated = true;
+                listBox1.Items.Add("G-loads updated");
             }
             else
             {
-                gLoadsAvailable = false;
+                gLoadsUpdated = false;
             }
 
-
-
-            if (GPSUpdated || attitudeUpdated)
+            if (NewARatesReceived.Count > 0)
             {
-                var watch = System.Diagnostics.Stopwatch.StartNew();
-                // the code that you want to measure comes here
-                
+                aRatesUpdated = true;
+                listBox1.Items.Add("Angular rates updated");
+            }
+            else
+            {
+                aRatesUpdated = false;
+            }
+
+            bool dataUpdated = GPSUpdated || attitudeUpdated || gLoadsUpdated || aRatesUpdated;
+
+            try
+            {
+                // Checking if the mission time goes from "minus" to "plus", and saving the time of launch as a julian date
+                double missionSeconds = timeString2seconds(RTtimestr);
+
+                if (plusminusTime == "-" && RTtimestr.Substring(0, 1) == "+")
+                {
+                    plusminusTime = "+";
+                    listBox1.Items.Add("Mission time is positive");
+
+                    if (GPSUpdated)
+                    {
+                        launchTime = NewGPSpositionsReceived[0].Time;
+                    }
+                    else
+                    {
+                        launchTime = new JulianDate(DateTime.Now);
+                    }
+                }
+            }
+            catch (Exception except)
+            {
+                listBox1.Items.Add("Failed to check the time: " + except.StackTrace.ToString());
+            }
+
+            if (dataUpdated || GPSpositionsReceived.Count>0 || AttitudeReceived.Count > 0)
+            {
+
+                //writer = new CesiumStreamWriter();
+                System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+                // Dates and positions lists, in case we want to sample more data before writing to server.
+                List<JulianDate> dates = new List<JulianDate>();
+                List<Cartographic> positions = new List<Cartographic>();
+                List<UnitQuaternion> orientations = new List<UnitQuaternion>();
+                List<double> speeds = new List<double>();
+                double speed = 0;
+                Cartesian gLoads = new Cartesian();
+                Cartesian aRates = new Cartesian();
+
+                // Resetting the stringwriter
+                sw = new StringWriter();
+
+                // Resetting the output
+                output = new CesiumOutputStream(sw);
+
+                // Trying to write the start sequence
                 try
                 {
-
-                    string missionTime = NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Time.ToString();
-                    double missionSeconds = timeString2seconds(RTtimestr);
-
-                    if (plusminusTime == "-" && RTtimestr.Substring(0, 1) == "+") {
-                        launchTime = NewGPSpositionsReceived[0].Time;
-                        plusminusTime = "+";
-                    }
-
-                    //writer = new CesiumStreamWriter();
-                    System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
-                    // Dates and positions lists, in case we want to sample more data before writing to server.
-                    List<JulianDate> dates = new List<JulianDate>();
-                    List<Cartographic> positions = new List<Cartographic>();
-                    List<UnitQuaternion> orientations = new List<UnitQuaternion>();
-                    List<double> speeds = new List<double>();
-                    double speed = 0;
-                    Cartesian gLoads = new Cartesian();
-                    Cartesian aRates = new Cartesian();
-
-                    // Resetting the stringwriter
-                    sw = new StringWriter();
-
-                    // Resetting the output
-                    output = new CesiumOutputStream(sw);
-
                     // Initializing a new json array
                     output.WriteStartSequence();
+                }
+                catch (Exception except)
+                {
+                    listBox1.Items.Add("Failed to write start sequence: " + except.StackTrace.ToString());
+                }
 
+                try
+                {
                     // Open a new packet for the rocket model
                     packet = writer.OpenPacket(output);
                     packet.WriteId("rocket");
-
-                    // Attach a path property to the rocket, enabling us to see the flight trail
-                    path = packet.OpenPathProperty();
-                    var pathMaterial = path.OpenMaterialProperty();
-                    var polyLineMat = pathMaterial.OpenSolidColorProperty();
-                    polyLineMat.WriteColorProperty(Color.Red);
-                    polyLineMat.Close();
-                    pathMaterial.Close();
-                    path.WriteWidthProperty(1);
-                    path.WriteLeadTimeProperty(0);
-                    path.WriteTrailTimeProperty(3600);
-                    path.WriteResolutionProperty(0.5);
-                    path.Close();
+                }
+                catch (Exception except)
+                {
+                    listBox1.Items.Add("Failed to open the rocket packet: " + except.StackTrace.ToString());
+                }
 
 
-                    // Open the positions packet
-                    position = packet.OpenPositionProperty();
-                    listBox1.Items.Add("Writing position property");
-
-                    // The first position packet states the inter- and extrapolating properties [Do we need this?]
-                    if (firstPositionPacket)
+                if (GPSUpdated)
+                {
+                    //var watch = System.Diagnostics.Stopwatch.StartNew();
+                    //// the code that you want to measure comes here
+                    try
                     {
-                        position.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Linear);
-                        position.WriteInterpolationDegree(1);
-                        position.WriteForwardExtrapolationDuration(extrapolationDuration);
-                        position.WriteBackwardExtrapolationDuration(extrapolationDuration);
-                        position.WriteForwardExtrapolationType(CesiumExtrapolationType.Extrapolate);
-                        firstPositionPacket = false;
-                    }
-                    if (GPSUpdated)
-                    {
-                        // INCLUDE A TIMER HERE TO KEEP TRACK ON THE TIME BETWEEN NEW DATA POINTS
+                        // Attach a path property to the rocket, enabling us to see the flight trail
+                        path = packet.OpenPathProperty();
+                        var pathMaterial = path.OpenMaterialProperty();
+                        var polyLineMat = pathMaterial.OpenSolidColorProperty();
+                        polyLineMat.WriteColorProperty(Color.Red);
+                        polyLineMat.Close();
+                        pathMaterial.Close();
+                        path.WriteWidthProperty(1);
+                        path.WriteLeadTimeProperty(0);
+                        path.WriteTrailTimeProperty(3600);
+                        path.WriteResolutionProperty(0.5);
+                        path.Close();
+
+
+                        // Open the positions packet
+                        position = packet.OpenPositionProperty();
+                        listBox1.Items.Add("Writing position property");
+
+                        // The first position packet states the inter- and extrapolating properties [Do we need this?]
+                        if (firstPositionPacket)
+                        {
+                            position.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Linear);
+                            position.WriteInterpolationDegree(1);
+                            position.WriteForwardExtrapolationDuration(extrapolationDuration);
+                            position.WriteBackwardExtrapolationDuration(extrapolationDuration);
+                            position.WriteForwardExtrapolationType(CesiumExtrapolationType.Extrapolate);
+                            firstPositionPacket = false;
+                        }
 
                         foreach (GPSposition tempPosition in NewGPSpositionsReceived)
                         {
@@ -1043,7 +1122,6 @@ namespace RamsesSniffer
                             PositionTimes.Add(tempPosition.Time);
                         }
                         listBox1.Items.Add("Pushing new GPS data");
-
 
                         if (NewGPSpositionsReceived.Count > 1)
                         {
@@ -1071,47 +1149,61 @@ namespace RamsesSniffer
                             }
                         }
 
-                    }
-                    else
-                    {
-                        // If no new GPS data is received but we have some old data, assume that data stream has initiated, but that it might have been interupted.
-                        if (GPSpositionsReceived.Count > 0)
-                        {
-                            // Re-send the last known position if data is missing
-                            GPSposition tempPosition = GPSpositionsReceived[GPSpositionsReceived.Count - 1];
-                            positions.Add(new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude));
-                            PositionTimes.Add(new JulianDate(DateTime.Now));
-                            listBox1.Items.Add("Pushing old GPS data");
-                        }
-                    }
 
-                    listBox1.Items.Add(positions.Count.ToString() + "-----" + PositionTimes.Count.ToString());
-                    try
-                    {
-                        position.WriteCartographicDegrees(PositionTimes, positions);
-                    }
-                    catch (ArgumentException argE)
-                    {
-                        if (PositionTimes.Count > positions.Count)
-                        {
-                            PositionTimes = PositionTimes.GetRange(0, positions.Count);
-                        }
-                        else if (PositionTimes.Count < positions.Count)
-                        {
-                            positions = positions.GetRange(0, PositionTimes.Count);
-                        }
-                        else
-                        {
-                            listBox1.Items.Add(argE.StackTrace.ToString());
-                        }
-                        listBox1.Items.Add("Exception! " + positions.Count.ToString() + "------" + PositionTimes.Count.ToString());
-                    }
-                    position.Close();
 
+
+                        listBox1.Items.Add(positions.Count.ToString() + "-----" + PositionTimes.Count.ToString());
+                        try
+                        {
+                            position.WriteCartographicDegrees(PositionTimes, positions);
+                        }
+                        catch (ArgumentException argE)
+                        {
+                            if (PositionTimes.Count > positions.Count)
+                            {
+                                PositionTimes = PositionTimes.GetRange(0, positions.Count);
+                            }
+                            else if (PositionTimes.Count < positions.Count)
+                            {
+                                positions = positions.GetRange(0, PositionTimes.Count);
+                            }
+                            else
+                            {
+                                listBox1.Items.Add(argE.StackTrace.ToString());
+                            }
+                            listBox1.Items.Add("Exception! " + positions.Count.ToString() + "------" + PositionTimes.Count.ToString());
+                        }
+                        position.Close();
+                    }
+                    catch (Exception except) {
+                        listBox1.Items.Add(except.StackTrace.ToString());
+                    }
+                }
+                else
+                {
+                    // If no new GPS data is received but we have some old data, assume that data stream has initiated, but that it might have been interupted.
+                    if (GPSpositionsReceived.Count > 0)
+                    {
+                        // Re-send the last known position if data is missing
+                        GPSposition tempPosition = GPSpositionsReceived[GPSpositionsReceived.Count - 1];
+                        positions.Add(new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude));
+                        PositionTimes.Add(new JulianDate(DateTime.Now));
+                        listBox1.Items.Add("Pushing old GPS data");
+                    }
+                }
+
+                try
+                {
                     // Open the orientation packet
                     orientation = packet.OpenOrientationProperty();
                     listBox1.Items.Add("Writing orientation property");
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to open the orientation packet: " + except.StackTrace.ToString());
+                }
 
+                if (attitudeUpdated)
+                {
                     // The first orientation packet states the inter- and extrapolating properties
                     if (firstOrientationPacket)
                     {
@@ -1122,95 +1214,126 @@ namespace RamsesSniffer
                         firstOrientationPacket = false;
                     }
 
-                    if (attitudeUpdated)
+
+                    // INCLUDE A TIMER HERE TO KEEP TRACK ON THE TIME BETWEEN NEW DATA POINTS
+                    foreach (Attitude tempAttitude in NewAttitudeReceived)
                     {
-                        // INCLUDE A TIMER HERE TO KEEP TRACK ON THE TIME BETWEEN NEW DATA POINTS
-                        foreach (Attitude tempAttitude in NewAttitudeReceived)
+                        if (expectedAttitudeFormat == "quaternion")
                         {
-                            if (expectedAttitudeFormat == "quaternion")
-                            {
-                                orientations.Add(TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3));
-                            }
+                            orientations.Add(TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3));
                         }
-                        listBox1.Items.Add("Pushing new attitude data");
+                    }
+                    listBox1.Items.Add("Pushing new attitude data");
+                }
+                else
+                {
+                    // If no new attitude data is received but we have some old data, assume that attitude data should be available, but that the stream might have been interupted.
+                    if (AttitudeReceived.Count > 0)
+                    {
+                        Attitude tempAttitude = AttitudeReceived[AttitudeReceived.Count - 1];
+                        if (expectedAttitudeFormat == "quaternion")
+                        {
+                            orientations.Add(TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3));
+                        }
+                    }
+                    // Otherwise, assume that attitude data is NOT available, and make sure that the attitude points in the direction of flight.
+                    else
+                    {
+                        if (NewGPSpositionsReceived.Count > 0 && GPSpositionsReceived.Count > 0)
+                        {
+                            orientations.AddRange(attitudeFromGPS(NewGPSpositionsReceived));
+                            AttitudeTimes = PositionTimes;
+                            listBox1.Items.Add("Number of new GPS positions: " + NewGPSpositionsReceived.Count.ToString());
+                            listBox1.Items.Add("Total number of GPS positions: " + GPSpositionsReceived.Count.ToString());
+                            listBox1.Items.Add("Number of new Attitude positions: " + orientations.Count.ToString());
+                        }
+                        else
+                        {
+                            orientations.Add(new UnitQuaternion(1, 0, 0, 0));
+                            AttitudeTimes.Add(new JulianDate(DateTime.Now));
+                        }
+                    }
+                }
+
+                try
+                {
+                    listBox1.Items.Add("The orientations: " + orientations[0].ToString());
+                    orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
+                }
+                catch (Exception argE)
+                {
+                    if (AttitudeTimes.Count > orientations.Count)
+                    {
+                        AttitudeTimes = AttitudeTimes.GetRange(0, orientations.Count);
+                        orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
+                    }
+                    else if (AttitudeTimes.Count < orientations.Count)
+                    {
+                        orientations = orientations.GetRange(0, AttitudeTimes.Count);
+                        orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
                     }
                     else
                     {
-                        // If no new attitude data is received but we have some old data, assume that attitude data should be available, but that the stream might have been interupted.
-                        if (AttitudeReceived.Count > 0)
-                        {
-                            Attitude tempAttitude = AttitudeReceived[AttitudeReceived.Count - 1];
-                            if (expectedAttitudeFormat == "quaternion")
-                            {
-                                orientations.Add(TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3));
-                            }
-                        }
-                        // Otherwise, assume that attitude data is NOT available, and make sure that the attitude points in the direction of flight.
-                        else
-                        {
-                            if (NewGPSpositionsReceived.Count > 0 && GPSpositionsReceived.Count > 0)
-                            {
-                                orientations.AddRange(attitudeFromGPS(NewGPSpositionsReceived));
-                                AttitudeTimes = PositionTimes;
-                                listBox1.Items.Add("Number of new GPS positions: " + NewGPSpositionsReceived.Count.ToString());
-                                listBox1.Items.Add("Total number of GPS positions: " + GPSpositionsReceived.Count.ToString());
-                                listBox1.Items.Add("Number of new Attitude positions: " + orientations.Count.ToString());
-                            }
-                            else
-                            {
-                                orientations.Add(new UnitQuaternion(1, 0, 0, 0));
-                                AttitudeTimes.Add(new JulianDate(DateTime.Now));
-                            }
-                        }
+                        listBox1.Items.Add(argE.StackTrace.ToString());
                     }
+                }
 
+                try
+                {
+                    orientation.Close();
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to close the attitude packet: " + except.StackTrace.ToString());
+                }
+
+                if (GPSUpdated || attitudeUpdated)
+                {
+                    // Write the model packet, and finally close the rocket packet
                     try
                     {
-                        listBox1.Items.Add("The orientations: " + orientations[0].ToString());
-                        orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
+                        // Opening the model packet
+                        model = packet.OpenModelProperty();
+                        listBox1.Items.Add("Writing model property");
+                        model.WriteGltfProperty(modelURL, CesiumResourceBehavior.LinkTo);
+                        model.WriteMinimumPixelSizeProperty(128);
+
+                        // Correcting the scale
+                        model.WriteScaleProperty(0.001);
+                        model.WriteMaximumScaleProperty(1);
+                        model.Close();
+
+
                     }
-                    catch (Exception argE)
+                    catch (Exception except)
                     {
-                        if (AttitudeTimes.Count > orientations.Count)
-                        {
-                            AttitudeTimes = AttitudeTimes.GetRange(0, orientations.Count);
-                            orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
-                        }
-                        else if (AttitudeTimes.Count < orientations.Count)
-                        {
-                            orientations = orientations.GetRange(0, AttitudeTimes.Count);
-                            orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
-                        }
-                        else
-                        {
-                            listBox1.Items.Add(argE.StackTrace.ToString());
-                        }
+                        listBox1.Items.Add("Failed to write model packet: " + except.StackTrace.ToString());
                     }
+                }
 
-                    orientation.Close();
-
-                    // Opening the model packet
-                    model = packet.OpenModelProperty();
-                    listBox1.Items.Add("Writing model property");
-                    model.WriteGltfProperty(modelURL, CesiumResourceBehavior.LinkTo);
-                    model.WriteMinimumPixelSizeProperty(128);
-
-                    // Correcting the scale
-                    model.WriteScaleProperty(0.001);
-                    model.WriteMaximumScaleProperty(1);
-                    model.Close();
-
+                try
+                {
                     // Close packet when everything is appended
                     packet.Close();
+                } catch (Exception except) {
+                    listBox1.Items.Add("Failed to close rocket packet: " + except.StackTrace.ToString());
+                }
 
-                    // Open the packet used for the speed, g-forces, adn possibly events.
+                try
+                {
+                    // Open the packet used for the speed, g-forces, and possibly events.
                     packet = writer.OpenPacket(output);
                     packet.WriteId("speed_gLoads");
                     packet.WriteName("event placeholder");
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to open the packet for speed and G-loads: " + except.StackTrace.ToString());
+                }
 
-                    // Opening the point packet (this is an abstract point, it will not be visible)
-                    point = packet.OpenPointProperty();
-                    point.WriteShowProperty(false);
+                // Opening the point packet (this is an abstract point, it will not be visible)
+                point = packet.OpenPointProperty();
+                point.WriteShowProperty(false);
+                if (gLoadsUpdated || speedUpdated)
+                {
                     // pixelSize will correspond to the speed
 
                     // Only update the speed if it has a valid update from the positions
@@ -1222,43 +1345,57 @@ namespace RamsesSniffer
                     //// outlineWidth will correspond to the time (for now)
                     //point.WriteOutlineWidthProperty(missionSeconds);
                     // The position of the point will correspont to the 3 component g-force
-                    if (GLoadsReceived.Count > 0)
+                    if (gLoadsUpdated)
                     {
                         gLoadPacket = packet.OpenPositionProperty();
-                        gLoads = GLoadsReceived[GLoadsReceived.Count - 1].toCartesian();
+                        gLoads = NewGLoadsReceived[NewGLoadsReceived.Count - 1].toCartesian();
                         gLoadPacket.WriteCartesian(gLoads);
                         gLoadPacket.Close();
                     }
-                    else
-                    {
-                        gLoads = new Cartesian(0, 0, 0);
-                    }
-
-                    
-
+                } try
+                {
                     // Closing the point packet
                     point.Close();
-
                     // Close packet when everything is appended
                     packet.Close();
+                } catch (Exception except) {
+                    listBox1.Items.Add("Failed to close the packet for speed and G-loads: " + except.StackTrace.ToString());
+                }
 
+                try
+                {
                     // Open the packet used for the angular rates and time.
                     packet = writer.OpenPacket(output);
                     packet.WriteId("angularRates_time");
                     packet.WriteName(RTtimestr);
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to open the packet for angular rates and time: " + except.StackTrace.ToString());
+                }
 
-                    // Opening the point packet (this is an abstract point, it will not be visible)
-                    point = packet.OpenPointProperty();
-                    point.WriteShowProperty(false);
+                // Opening the point packet (this is an abstract point, it will not be visible)
+                point = packet.OpenPointProperty();
+                point.WriteShowProperty(false);
 
-                    try
+                try
+                {
+                    listBox1.Items.Add(launchTime);
+                    if (GPSUpdated)
                     {
-                        listBox1.Items.Add(launchTime);
                         point.WritePixelSizeProperty(launchTime.SecondsDifference(NewGPSpositionsReceived[0].Time));
                     }
-                    catch (Exception except){
-                        listBox1.Items.Add(except.StackTrace.ToString());
+                    else
+                    {
+                        point.WritePixelSizeProperty(launchTime.SecondsDifference(new JulianDate(DateTime.Now)));
                     }
+                }
+                catch (Exception except)
+                {
+                    listBox1.Items.Add(except.StackTrace.ToString());
+                }
+
+                if (aRatesUpdated)
+                {
 
                     if (ARatesReceived.Count > 0)
                     {
@@ -1267,63 +1404,95 @@ namespace RamsesSniffer
                         aRatePacket.WriteCartesian(aRates);
                         aRatePacket.Close();
                     }
+                }
 
+                try
+                {
                     // Closing the point packet
                     point.Close();
-
                     // Close packet when everything is appended
                     packet.Close();
-
-
-                    if (GPSUpdated)
-                    {
-                        // Opening the last packet, which will be used to store the previous positions, used if a client connects mid-flight
-                        packet = writer.OpenPacket(output);
-                        listBox1.Items.Add("Writing flight path");
-                        packet.WriteId("flightPath");
-                        polyLine = packet.OpenPolylineProperty();
-                        var material = polyLine.OpenMaterialProperty();
-                        var pathColor = material.OpenSolidColorProperty();
-                        pathColor.WriteColorProperty(Color.Red);
-                        pathColor.Close();
-                        material.Close();
-                        polyLine.WriteFollowSurfaceProperty(false);
-                        polyLine.WriteWidthProperty(1);
-                        polyLine.WritePositionsPropertyCartographicDegrees(positions);
-                        polyLine.Close();
-
-                        packet.Close();
-                    }
-
-                    // End sequence to close the json array
-                    output.WriteEndSequence();
-
-                    // Create POST data and convert it to a byte array.
-                    byteArray = Encoding.UTF8.GetBytes(sw.ToString());
-
-                    listBox1.Items.Add(sw.ToString());
-
-                    // Close the string writer
-                    sw.Close();
-
-                    listBox1.Items.Add("Pushing...");
-                    var responseStatus = postData(byteArray);
-
-                    GPSpositionsReceived.AddRange(NewGPSpositionsReceived);
-                    AttitudeReceived.AddRange(NewAttitudeReceived);
-
-                    // Resetting some variables
-                    NewGPSpositionsReceived = new List<GPSposition>();
-                    NewAttitudeReceived = new List<Attitude>();
-                    PositionTimes = new List<JulianDate>();
-                    AttitudeTimes = new List<JulianDate>();
                 }
                 catch (Exception except) {
-                    listBox1.Items.Add(except.StackTrace.ToString());
+                    listBox1.Items.Add("Failed to close the packet for angular rates and time: " + except.StackTrace.ToString());
                 }
-                watch.Stop();
-                listBox1.Items.Add("Time of execution: " + watch.ElapsedMilliseconds.ToString());
+
+                try
+                {
+                    // Opening the last packet, which will be used to store the previous positions, used if a client connects mid-flight
+                    packet = writer.OpenPacket(output);
+                    listBox1.Items.Add("Writing flight path");
+                    packet.WriteId("flightPath");
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to open flight path packet: " + except.StackTrace.ToString());
+                }
+
+                if (GPSUpdated)
+                {
+                    polyLine = packet.OpenPolylineProperty();
+                    var material = polyLine.OpenMaterialProperty();
+                    var pathColor = material.OpenSolidColorProperty();
+                    pathColor.WriteColorProperty(Color.Red);
+                    pathColor.Close();
+                    material.Close();
+                    polyLine.WriteFollowSurfaceProperty(false);
+                    polyLine.WriteWidthProperty(1);
+                    polyLine.WritePositionsPropertyCartographicDegrees(positions);
+                    polyLine.Close();
+                }
+
+                try
+                {
+                    packet.Close();
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to close flight path packet: " + except.StackTrace.ToString());
+                }
+
+                try
+                {
+                    // End sequence to close the json array
+                    output.WriteEndSequence();
+                }
+                catch (Exception except) {
+                    listBox1.Items.Add("Failed to write end sequence on JSON array: " + except.StackTrace.ToString());
+                }
+
+                // Create POST data and convert it to a byte array.
+                byteArray = Encoding.UTF8.GetBytes(sw.ToString());
+
+                listBox1.Items.Add(sw.ToString());
+
+                // Close the string writer
+                sw.Close();
+
+                listBox1.Items.Add("Pushing...");
+                var responseStatus = postData(byteArray);
+
+                GPSpositionsReceived.AddRange(NewGPSpositionsReceived);
+                AttitudeReceived.AddRange(NewAttitudeReceived);
+                GLoadsReceived.AddRange(NewGLoadsReceived);
+                ARatesReceived.AddRange(NewARatesReceived);
+
+                // Resetting some variables
+                NewGPSpositionsReceived = new List<GPSposition>();
+                NewAttitudeReceived = new List<Attitude>();
+                NewGLoadsReceived = new List<GLoads>();
+                NewARatesReceived = new List<AngularRates>();
+                PositionTimes = new List<JulianDate>();
+                AttitudeTimes = new List<JulianDate>();
             }
+
+            //watch.Stop();
+            //listBox1.Items.Add("Time of execution: " + watch.ElapsedMilliseconds.ToString());
+            //else if (!dataUpdated && GPSpositionsReceived.Count > 0) {
+            //    // Re-send the last known position if data is missing
+            //    GPSposition tempPosition = GPSpositionsReceived[GPSpositionsReceived.Count - 1];
+            //    positions.Add(new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude));
+            //    PositionTimes.Add(new JulianDate(DateTime.Now));
+            //    listBox1.Items.Add("Pushing old GPS data");
+            //}
             else
             {
                 // If we are not receiving any data, just ping the server to ensure that we have a connection
@@ -1356,6 +1525,18 @@ namespace RamsesSniffer
 
             // Close first package
             packet.Close();
+
+
+            // Writing the time to a separate packet
+            if (RTtimestr != "")
+            {
+                // Add a new packet
+                packet = writer.OpenPacket(output);
+                packet.WriteId("pingTimePacket");
+                packet.WriteName(RTtimestr);
+                // Close package
+                packet.Close();
+            }
 
             // Closing bracket
             output.WriteEndSequence();
@@ -1672,6 +1853,24 @@ namespace RamsesSniffer
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void comboBox2_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (comboBox2.SelectedIndex == 0) {
+                testTypeLabel.Hide();
+                GPSTestCheckBox.Hide();
+                attitudeTestCheckBox.Hide();
+                gLoadTestCheckBox.Hide();
+                aRateTestCheckBox.Hide();
+            } else if (comboBox2.SelectedIndex == 1)
+            {
+                testTypeLabel.Show();
+                GPSTestCheckBox.Show();
+                attitudeTestCheckBox.Show();
+                gLoadTestCheckBox.Show();
+                aRateTestCheckBox.Show();
+            }
         }
     }
 }

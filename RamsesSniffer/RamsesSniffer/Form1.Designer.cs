@@ -44,6 +44,13 @@
             this.label8 = new System.Windows.Forms.Label();
             this.label9 = new System.Windows.Forms.Label();
             this.label10 = new System.Windows.Forms.Label();
+            this.comboBox2 = new System.Windows.Forms.ComboBox();
+            this.label11 = new System.Windows.Forms.Label();
+            this.GPSTestCheckBox = new System.Windows.Forms.CheckBox();
+            this.attitudeTestCheckBox = new System.Windows.Forms.CheckBox();
+            this.gLoadTestCheckBox = new System.Windows.Forms.CheckBox();
+            this.aRateTestCheckBox = new System.Windows.Forms.CheckBox();
+            this.testTypeLabel = new System.Windows.Forms.Label();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -183,11 +190,88 @@
             this.label10.TabIndex = 14;
             this.label10.Text = "GPS IIP:";
             // 
+            // comboBox2
+            // 
+            this.comboBox2.FormattingEnabled = true;
+            this.comboBox2.Location = new System.Drawing.Point(808, 125);
+            this.comboBox2.Name = "comboBox2";
+            this.comboBox2.Size = new System.Drawing.Size(121, 21);
+            this.comboBox2.TabIndex = 15;
+            this.comboBox2.SelectedIndexChanged += new System.EventHandler(this.comboBox2_SelectedIndexChanged);
+            // 
+            // label11
+            // 
+            this.label11.AutoSize = true;
+            this.label11.Enabled = false;
+            this.label11.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F);
+            this.label11.Location = new System.Drawing.Point(808, 104);
+            this.label11.Name = "label11";
+            this.label11.Size = new System.Drawing.Size(53, 20);
+            this.label11.TabIndex = 16;
+            this.label11.Text = "Mode ";
+            this.label11.UseWaitCursor = true;
+            // 
+            // GPSTestCheckBox
+            // 
+            this.GPSTestCheckBox.AutoSize = true;
+            this.GPSTestCheckBox.Location = new System.Drawing.Point(808, 171);
+            this.GPSTestCheckBox.Name = "GPSTestCheckBox";
+            this.GPSTestCheckBox.Size = new System.Drawing.Size(96, 17);
+            this.GPSTestCheckBox.TabIndex = 17;
+            this.GPSTestCheckBox.Text = "Test GPS data";
+            this.GPSTestCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // attitudeTestCheckBox
+            // 
+            this.attitudeTestCheckBox.AutoSize = true;
+            this.attitudeTestCheckBox.Location = new System.Drawing.Point(808, 194);
+            this.attitudeTestCheckBox.Name = "attitudeTestCheckBox";
+            this.attitudeTestCheckBox.Size = new System.Drawing.Size(109, 17);
+            this.attitudeTestCheckBox.TabIndex = 18;
+            this.attitudeTestCheckBox.Text = "Test attitude data";
+            this.attitudeTestCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // gLoadTestCheckBox
+            // 
+            this.gLoadTestCheckBox.AutoSize = true;
+            this.gLoadTestCheckBox.Location = new System.Drawing.Point(808, 217);
+            this.gLoadTestCheckBox.Name = "gLoadTestCheckBox";
+            this.gLoadTestCheckBox.Size = new System.Drawing.Size(105, 17);
+            this.gLoadTestCheckBox.TabIndex = 19;
+            this.gLoadTestCheckBox.Text = "Test G-load data";
+            this.gLoadTestCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // aRateTestCheckBox
+            // 
+            this.aRateTestCheckBox.AutoSize = true;
+            this.aRateTestCheckBox.Location = new System.Drawing.Point(808, 240);
+            this.aRateTestCheckBox.Name = "aRateTestCheckBox";
+            this.aRateTestCheckBox.Size = new System.Drawing.Size(130, 17);
+            this.aRateTestCheckBox.TabIndex = 20;
+            this.aRateTestCheckBox.Text = "Test angular rate data";
+            this.aRateTestCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // testTypeLabel
+            // 
+            this.testTypeLabel.AutoSize = true;
+            this.testTypeLabel.Location = new System.Drawing.Point(809, 152);
+            this.testTypeLabel.Name = "testTypeLabel";
+            this.testTypeLabel.Size = new System.Drawing.Size(156, 13);
+            this.testTypeLabel.TabIndex = 21;
+            this.testTypeLabel.Text = "What data do you want to test?";
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(814, 616);
+            this.ClientSize = new System.Drawing.Size(966, 616);
+            this.Controls.Add(this.testTypeLabel);
+            this.Controls.Add(this.aRateTestCheckBox);
+            this.Controls.Add(this.gLoadTestCheckBox);
+            this.Controls.Add(this.attitudeTestCheckBox);
+            this.Controls.Add(this.GPSTestCheckBox);
+            this.Controls.Add(this.label11);
+            this.Controls.Add(this.comboBox2);
             this.Controls.Add(this.label10);
             this.Controls.Add(this.label9);
             this.Controls.Add(this.label8);
@@ -226,6 +310,13 @@
         private System.Windows.Forms.Timer timer1;
         private System.Windows.Forms.Label label9;
         private System.Windows.Forms.Label label10;
+        private System.Windows.Forms.ComboBox comboBox2;
+        private System.Windows.Forms.Label label11;
+        private System.Windows.Forms.CheckBox GPSTestCheckBox;
+        private System.Windows.Forms.CheckBox attitudeTestCheckBox;
+        private System.Windows.Forms.CheckBox gLoadTestCheckBox;
+        private System.Windows.Forms.CheckBox aRateTestCheckBox;
+        private System.Windows.Forms.Label testTypeLabel;
     }
 }
 
