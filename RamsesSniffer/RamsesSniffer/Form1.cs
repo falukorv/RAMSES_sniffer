@@ -59,6 +59,7 @@ namespace RamsesSniffer
         private PacketIdentifier PacketID_GCS = new PacketIdentifier(0x08, 0x30, -1, -1, "GCS 50Hz data");
         private PacketIdentifier PacketID_PCDU = new PacketIdentifier(0x08, 0x0D, 0x00, -1, "PCDU data");
         private PacketIdentifier PacketID_THERM = new PacketIdentifier(0x08, 0x10, -1, 0x01, "Thermo board data packet");
+        private List<GPS_IIP> NewGPS_IIP_Received = new List<GPS_IIP>();
 
         /*--------------------------------------------------------------------*/
         /*----------------------------Data pusher-----------------------------*/
@@ -78,7 +79,11 @@ namespace RamsesSniffer
         private List<AngularRates> NewARatesReceived = new List<AngularRates>();
 
         // Check if mission time goes from minus to plus
-        string plusminusTime = "-";
+        private string plusminusTime = "-";
+
+        // List of events
+        private int[] eventTimeList = new int[] {-9999,-300, -240, -150, -70, -65, -60, -60, -57, -47, -40, -25, -20, -16, -14, -9, -8, 0, 62, 64, 86, 96, 160, 230, 800, 845};
+        private string[] eventStringList = new string[] {"Server synchronized with data pusher", "Rocket system in 'flight mode'", "TGV/INA on INTERNAL power", "360 Recording started", "XRMON-DIFF2 Internal power (module)", "XRMON-DIFF2 Internal power (furnace 1)", "XRMON-DIFF2 Internal power (furnace 2)", "Launch sequencer activation", "TVA command check", "TVA check (unpressurised)", "Charging pressurising pyro capacitors", "Verifying launcher status and arming TVA", "TVA Pressurising", "TVA pressure check", "TVA Deflection test", "TVA Baseline Retrace test", "Go signal", "Lift-off", "Expected motor burn-out", "XRMON-DIFF2 Image sequence start", "Expected motor separation", "Expected Super-Max separation", "XRMON-DIFF2 Alumina shearing", "XRMON-DIFF2 Graphite shearing", "XRMON-DIFF2 Experiment power down", "Castor 4B destruction"};
 
         // Check if the properties are updated
         private bool GPSUpdated;
@@ -87,7 +92,7 @@ namespace RamsesSniffer
         private bool aRatesUpdated;
         private bool gLoadsUpdated;
         private bool eventStringUpdated;
-        private bool impactPointUpdated;
+        private bool IIPUpdated;
 
         // The frequency of which we will push data to the visualization server.
         private static double pushFrequency = 2;
@@ -103,6 +108,7 @@ namespace RamsesSniffer
         private PositionCesiumWriter position;
         private PositionCesiumWriter gLoadPacket; // Will write the g-forces as the coordinates of an abstract point
         private PositionCesiumWriter aRatePacket; // Will write the angular rates as the coordinates of an abstract point
+        private PositionCesiumWriter IIPPacket; 
         private OrientationCesiumWriter orientation;
         private ModelCesiumWriter model;
         private PointCesiumWriter point;
@@ -135,6 +141,8 @@ namespace RamsesSniffer
         private JulianDate lastJulianDate; // Julian date of the last received message
         private DateTime currentDate = DateTime.Now;
         private JulianDate launchTime;
+        private double missionSeconds; // The mission time in seconds
+        private bool launched = false;
 
         // The duration for how long we are extrapolating
         private Duration extrapolationDuration;
@@ -217,11 +225,11 @@ namespace RamsesSniffer
         {
             public double Longitude = 0;
             public double Latitude = 0;
-            public string Time = "";
+            public JulianDate Time = new JulianDate();
             public string RAWmessage = "";
             public double TimeToImpact = 0;
 
-            public GPS_IIP(double longitude, double latitude, string time, string raw, double timeToImpact)
+            public GPS_IIP(double longitude, double latitude, JulianDate time, string raw, double timeToImpact)
             {
                 Longitude = longitude;
                 Latitude = latitude;
@@ -229,6 +237,12 @@ namespace RamsesSniffer
                 RAWmessage = raw;
                 TimeToImpact = timeToImpact;
             }
+
+            public Cartographic toCartographic()
+            {
+                return new Cartographic(Longitude, Latitude, 0);
+            }
+
         }
 
         class Attitude
@@ -629,8 +643,10 @@ namespace RamsesSniffer
                     //Time to impact, seconds
                     double timeToImpact = double.Parse(msg.Substring(48, 7), CultureInfo.InvariantCulture);
 
-                    GPS_IIP IIP = new GPS_IIP(longitud, latitude, time, msg, timeToImpact);
-                    GPS_IIP_Received.Add(IIP);
+                    DateTime timeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
+
+                    GPS_IIP IIP = new GPS_IIP(longitud, latitude, new JulianDate(timeStamp), msg, timeToImpact);
+                    NewGPS_IIP_Received.Add(IIP);
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_GCS)) //If it is a GCS packet
                 {
@@ -819,10 +835,6 @@ namespace RamsesSniffer
 
         /* onTestEvent is used to test the functionaliny of the pusher without having to use real network data. */
         private void onTestEvent(object sender, System.Timers.ElapsedEventArgs e) {
-            bool testGPS = true;
-            bool testAttitude = true;
-            bool testGLoads = true;
-            bool testAngularRates = false;
 
             if (linecounter > 9)
             {
@@ -837,10 +849,11 @@ namespace RamsesSniffer
                 //yaw = Convert.ToDouble(values[46]);
                 //pitch = Convert.ToDouble(values[45]);
                 //roll = Convert.ToDouble(values[44]);
+                DateTime timeStamp = DateTime.Now;
                 if (GPSTestCheckBox.Checked)
                 {
                     listBox1.Items.Add("Testing GPS");
-                    DateTime timeStamp = DateTime.Now;
+                    
 
                     //testLong += rand.NextDouble() * 0.00001;
                     //testLat += rand.NextDouble() * 0.00001;
@@ -878,32 +891,44 @@ namespace RamsesSniffer
                     NewARatesReceived.Add(testARates);
                 }
 
-                double secondsSince = linecounter * 0.1;
+                if (IIPTestCheckbox.Checked)
+                {
+                    GPS_IIP testIIP = new GPS_IIP(20.6791, 68.5443, new JulianDate(timeStamp), "what", 20);
+                    NewGPS_IIP_Received.Add(testIIP);
+                }
 
-                double minutes = Math.Floor(secondsSince / 60);
-                double seconds = Math.Floor(secondsSince % 60);
+                double secondsSince = linecounter * 0.1-70;
+
+                double minutes = Math.Truncate(secondsSince / 60);
+                double seconds = Math.Truncate(secondsSince % 60);
                 string secondsString;
                 string minutesString;
 
-                if (seconds < 10)
+                if (Math.Abs(seconds) < 10)
                 {
-                    secondsString = "0" + seconds.ToString();
+                    secondsString = "0" + Math.Abs(seconds).ToString();
                 }
                 else
                 {
-                    secondsString = seconds.ToString();
+                    secondsString = Math.Abs(seconds).ToString();
                 }
 
-                if (minutes < 10)
+                if (Math.Abs(minutes) < 10)
                 {
-                    minutesString = "0" + minutes.ToString();
+                    minutesString = "0" + Math.Abs(minutes).ToString();
                 }
                 else
                 {
-                    minutesString = minutes.ToString();
+                    minutesString = Math.Abs(minutes).ToString();
                 }
 
-                RTtimestr = "+00:" + minutesString + ":" + secondsString;
+                if (secondsSince > 0)
+                {
+                    RTtimestr = "+00:" + minutesString + ":" + secondsString;
+                }
+                else {
+                    RTtimestr = "-00:" + minutesString + ":" + secondsString;
+                }
 
                 linecounter++;
                 //NewDataFlag = true;
@@ -957,9 +982,6 @@ namespace RamsesSniffer
             // Posting the data to the server
             var responseStatus = postData(byteArray);
 
-            // Writing the response to the console
-            //Console.WriteLine(responseStatus.ToString());
-
             // Closing the string writer
             sw.Close();
         }
@@ -1011,12 +1033,23 @@ namespace RamsesSniffer
                 aRatesUpdated = false;
             }
 
-            bool dataUpdated = GPSUpdated || attitudeUpdated || gLoadsUpdated || aRatesUpdated;
+            if (NewGPS_IIP_Received.Count > 0)
+            {
+                IIPUpdated = true;
+                listBox1.Items.Add("IIP updated");
+            }
+            else
+            {
+                IIPUpdated = false;
+            }
+
+            bool dataUpdated = GPSUpdated || attitudeUpdated || gLoadsUpdated || aRatesUpdated || IIPUpdated;
 
             try
             {
                 // Checking if the mission time goes from "minus" to "plus", and saving the time of launch as a julian date
-                double missionSeconds = timeString2seconds(RTtimestr);
+                missionSeconds = timeString2seconds(RTtimestr);
+                listBox1.Items.Add("seconds: " + missionSeconds);
 
                 if (plusminusTime == "-" && RTtimestr.Substring(0, 1) == "+")
                 {
@@ -1031,6 +1064,7 @@ namespace RamsesSniffer
                     {
                         launchTime = new JulianDate(DateTime.Now);
                     }
+                    launched = true;
                 }
             }
             catch (Exception except)
@@ -1041,7 +1075,7 @@ namespace RamsesSniffer
             if (dataUpdated || GPSpositionsReceived.Count>0 || AttitudeReceived.Count > 0)
             {
 
-                //writer = new CesiumStreamWriter();
+                writer = new CesiumStreamWriter();
                 System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
                 // Dates and positions lists, in case we want to sample more data before writing to server.
                 List<JulianDate> dates = new List<JulianDate>();
@@ -1323,7 +1357,8 @@ namespace RamsesSniffer
                     // Open the packet used for the speed, g-forces, and possibly events.
                     packet = writer.OpenPacket(output);
                     packet.WriteId("speed_gLoads");
-                    packet.WriteName("event placeholder");
+                    string eventString = eventStringFromList(missionSeconds);
+                    packet.WriteName(eventString);
                 }
                 catch (Exception except) {
                     listBox1.Items.Add("Failed to open the packet for speed and G-loads: " + except.StackTrace.ToString());
@@ -1352,7 +1387,9 @@ namespace RamsesSniffer
                         gLoadPacket.WriteCartesian(gLoads);
                         gLoadPacket.Close();
                     }
-                } try
+                }
+
+                try
                 {
                     // Closing the point packet
                     point.Close();
@@ -1373,20 +1410,40 @@ namespace RamsesSniffer
                     listBox1.Items.Add("Failed to open the packet for angular rates and time: " + except.StackTrace.ToString());
                 }
 
-                // Opening the point packet (this is an abstract point, it will not be visible)
-                point = packet.OpenPointProperty();
-                point.WriteShowProperty(false);
+                try
+                {
+                    // Opening the point packet (this is an abstract point, it will not be visible)
+                    point = packet.OpenPointProperty();
+                    point.WriteShowProperty(false);
+                }
+                catch (Exception except)
+                {
+                    listBox1.Items.Add("Failed to open the point packet for time and angular rates: " + except.StackTrace.ToString());
+                }
 
                 try
                 {
                     listBox1.Items.Add(launchTime);
                     if (GPSUpdated)
                     {
-                        point.WritePixelSizeProperty(launchTime.SecondsDifference(NewGPSpositionsReceived[0].Time));
+                        if (launched)
+                        {
+                            point.WritePixelSizeProperty(launchTime.SecondsDifference(NewGPSpositionsReceived[0].Time));
+                        }
+                        else {
+                            point.WritePixelSizeProperty(-1);
+                        }
                     }
                     else
                     {
-                        point.WritePixelSizeProperty(launchTime.SecondsDifference(new JulianDate(DateTime.Now)));
+                        if (launched)
+                        {
+                            point.WritePixelSizeProperty(launchTime.SecondsDifference(new JulianDate(DateTime.Now)));
+                        }
+                        else
+                        {
+                            point.WritePixelSizeProperty(-1);
+                        }
                     }
                 }
                 catch (Exception except)
@@ -1397,10 +1454,10 @@ namespace RamsesSniffer
                 if (aRatesUpdated)
                 {
 
-                    if (ARatesReceived.Count > 0)
+                    if (NewARatesReceived.Count > 0)
                     {
                         aRatePacket = packet.OpenPositionProperty();
-                        aRates = ARatesReceived[ARatesReceived.Count - 1].toCartesian();
+                        aRates = NewARatesReceived[NewARatesReceived.Count - 1].toCartesian();
                         aRatePacket.WriteCartesian(aRates);
                         aRatePacket.Close();
                     }
@@ -1414,6 +1471,52 @@ namespace RamsesSniffer
                     packet.Close();
                 }
                 catch (Exception except) {
+                    listBox1.Items.Add("Failed to close the packet for angular rates and time: " + except.StackTrace.ToString());
+                }
+
+                try
+                {
+                    // Open the packet used for the IIP.
+                    packet = writer.OpenPacket(output);
+                    packet.WriteId("IIP_coordinates");
+                }
+                catch (Exception except)
+                {
+                    listBox1.Items.Add("Failed to open the packet for IIP: " + except.StackTrace.ToString());
+                }
+
+                try
+                {
+                    // Opening a point packet, which will be used to show the IIP
+                    point = packet.OpenPointProperty();
+                    point.WriteShowProperty(false);
+                }
+                catch (Exception except)
+                {
+                    listBox1.Items.Add("Failed to close the point packet for IIP: " + except.StackTrace.ToString());
+                }
+
+                if (IIPUpdated)
+                {
+
+                    if (NewGPS_IIP_Received.Count > 0)
+                    {
+                        IIPPacket = packet.OpenPositionProperty();
+                        Cartographic IIP = NewGPS_IIP_Received[NewGPS_IIP_Received.Count - 1].toCartographic() ;
+                        IIPPacket.WriteCartographicDegrees(IIP);
+                        IIPPacket.Close();
+                    }
+                }
+
+                try
+                {
+                    // Closing the point packet
+                    point.Close();
+                    // Close packet when everything is appended
+                    packet.Close();
+                }
+                catch (Exception except)
+                {
                     listBox1.Items.Add("Failed to close the packet for angular rates and time: " + except.StackTrace.ToString());
                 }
 
@@ -1474,9 +1577,11 @@ namespace RamsesSniffer
                 AttitudeReceived.AddRange(NewAttitudeReceived);
                 GLoadsReceived.AddRange(NewGLoadsReceived);
                 ARatesReceived.AddRange(NewARatesReceived);
+                GPS_IIP_Received.AddRange(NewGPS_IIP_Received);
 
                 // Resetting some variables
                 NewGPSpositionsReceived = new List<GPSposition>();
+                NewGPS_IIP_Received = new List<GPS_IIP>();
                 NewAttitudeReceived = new List<Attitude>();
                 NewGLoadsReceived = new List<GLoads>();
                 NewARatesReceived = new List<AngularRates>();
@@ -1548,6 +1653,17 @@ namespace RamsesSniffer
             var responseStatus = postData(byteArray);
 
             sw.Close();
+        }
+
+        private string eventStringFromList(double missionTimeInSeconds) {
+            int maxIndex = 0;
+            for (int eventIndex = 0 ; eventIndex < eventTimeList.Length; eventIndex++){
+                if (eventTimeList[eventIndex] <= missionTimeInSeconds) {
+                    maxIndex = eventIndex;
+                }
+            }
+
+            return eventStringList[maxIndex];
         }
 
         /* Converting a time string of the format "+-hh;mm;ss" to seconds. */
@@ -1863,6 +1979,7 @@ namespace RamsesSniffer
                 attitudeTestCheckBox.Hide();
                 gLoadTestCheckBox.Hide();
                 aRateTestCheckBox.Hide();
+                IIPTestCheckbox.Hide();
             } else if (comboBox2.SelectedIndex == 1)
             {
                 testTypeLabel.Show();
@@ -1870,6 +1987,7 @@ namespace RamsesSniffer
                 attitudeTestCheckBox.Show();
                 gLoadTestCheckBox.Show();
                 aRateTestCheckBox.Show();
+                IIPTestCheckbox.Show();
             }
         }
     }

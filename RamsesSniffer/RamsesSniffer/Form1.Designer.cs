@@ -51,6 +51,7 @@
             this.gLoadTestCheckBox = new System.Windows.Forms.CheckBox();
             this.aRateTestCheckBox = new System.Windows.Forms.CheckBox();
             this.testTypeLabel = new System.Windows.Forms.Label();
+            this.IIPTestCheckbox = new System.Windows.Forms.CheckBox();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -216,9 +217,9 @@
             this.GPSTestCheckBox.AutoSize = true;
             this.GPSTestCheckBox.Location = new System.Drawing.Point(808, 171);
             this.GPSTestCheckBox.Name = "GPSTestCheckBox";
-            this.GPSTestCheckBox.Size = new System.Drawing.Size(96, 17);
+            this.GPSTestCheckBox.Size = new System.Drawing.Size(48, 17);
             this.GPSTestCheckBox.TabIndex = 17;
-            this.GPSTestCheckBox.Text = "Test GPS data";
+            this.GPSTestCheckBox.Text = "GPS";
             this.GPSTestCheckBox.UseVisualStyleBackColor = true;
             // 
             // attitudeTestCheckBox
@@ -226,9 +227,9 @@
             this.attitudeTestCheckBox.AutoSize = true;
             this.attitudeTestCheckBox.Location = new System.Drawing.Point(808, 194);
             this.attitudeTestCheckBox.Name = "attitudeTestCheckBox";
-            this.attitudeTestCheckBox.Size = new System.Drawing.Size(109, 17);
+            this.attitudeTestCheckBox.Size = new System.Drawing.Size(62, 17);
             this.attitudeTestCheckBox.TabIndex = 18;
-            this.attitudeTestCheckBox.Text = "Test attitude data";
+            this.attitudeTestCheckBox.Text = "Attitude";
             this.attitudeTestCheckBox.UseVisualStyleBackColor = true;
             // 
             // gLoadTestCheckBox
@@ -236,9 +237,9 @@
             this.gLoadTestCheckBox.AutoSize = true;
             this.gLoadTestCheckBox.Location = new System.Drawing.Point(808, 217);
             this.gLoadTestCheckBox.Name = "gLoadTestCheckBox";
-            this.gLoadTestCheckBox.Size = new System.Drawing.Size(105, 17);
+            this.gLoadTestCheckBox.Size = new System.Drawing.Size(62, 17);
             this.gLoadTestCheckBox.TabIndex = 19;
-            this.gLoadTestCheckBox.Text = "Test G-load data";
+            this.gLoadTestCheckBox.Text = "G-loads";
             this.gLoadTestCheckBox.UseVisualStyleBackColor = true;
             // 
             // aRateTestCheckBox
@@ -246,9 +247,9 @@
             this.aRateTestCheckBox.AutoSize = true;
             this.aRateTestCheckBox.Location = new System.Drawing.Point(808, 240);
             this.aRateTestCheckBox.Name = "aRateTestCheckBox";
-            this.aRateTestCheckBox.Size = new System.Drawing.Size(130, 17);
+            this.aRateTestCheckBox.Size = new System.Drawing.Size(88, 17);
             this.aRateTestCheckBox.TabIndex = 20;
-            this.aRateTestCheckBox.Text = "Test angular rate data";
+            this.aRateTestCheckBox.Text = "Angular rates";
             this.aRateTestCheckBox.UseVisualStyleBackColor = true;
             // 
             // testTypeLabel
@@ -260,11 +261,22 @@
             this.testTypeLabel.TabIndex = 21;
             this.testTypeLabel.Text = "What data do you want to test?";
             // 
+            // IIPTestCheckbox
+            // 
+            this.IIPTestCheckbox.AutoSize = true;
+            this.IIPTestCheckbox.Location = new System.Drawing.Point(808, 264);
+            this.IIPTestCheckbox.Name = "IIPTestCheckbox";
+            this.IIPTestCheckbox.Size = new System.Drawing.Size(39, 17);
+            this.IIPTestCheckbox.TabIndex = 22;
+            this.IIPTestCheckbox.Text = "IIP";
+            this.IIPTestCheckbox.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(966, 616);
+            this.Controls.Add(this.IIPTestCheckbox);
             this.Controls.Add(this.testTypeLabel);
             this.Controls.Add(this.aRateTestCheckBox);
             this.Controls.Add(this.gLoadTestCheckBox);
@@ -317,6 +329,7 @@
         private System.Windows.Forms.CheckBox gLoadTestCheckBox;
         private System.Windows.Forms.CheckBox aRateTestCheckBox;
         private System.Windows.Forms.Label testTypeLabel;
+        private System.Windows.Forms.CheckBox IIPTestCheckbox;
     }
 }
 
