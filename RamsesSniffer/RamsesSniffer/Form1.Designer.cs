@@ -53,6 +53,7 @@
             this.testTypeLabel = new System.Windows.Forms.Label();
             this.IIPTestCheckbox = new System.Windows.Forms.CheckBox();
             this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
+            this.comboBox3 = new System.Windows.Forms.ComboBox();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -168,7 +169,7 @@
             // label8
             // 
             this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(12, 67);
+            this.label8.Location = new System.Drawing.Point(12, 88);
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(35, 13);
             this.label8.TabIndex = 12;
@@ -272,11 +273,21 @@
             this.IIPTestCheckbox.Text = "IIP";
             this.IIPTestCheckbox.UseVisualStyleBackColor = true;
             // 
+            // comboBox3
+            // 
+            this.comboBox3.FormattingEnabled = true;
+            this.comboBox3.Location = new System.Drawing.Point(13, 64);
+            this.comboBox3.Name = "comboBox3";
+            this.comboBox3.Size = new System.Drawing.Size(119, 21);
+            this.comboBox3.TabIndex = 23;
+            this.comboBox3.SelectedIndexChanged += new System.EventHandler(this.comboBox3_SelectedIndexChanged);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(966, 616);
+            this.Controls.Add(this.comboBox3);
             this.Controls.Add(this.IIPTestCheckbox);
             this.Controls.Add(this.testTypeLabel);
             this.Controls.Add(this.aRateTestCheckBox);
@@ -333,6 +344,7 @@
         private System.Windows.Forms.Label testTypeLabel;
         private System.Windows.Forms.CheckBox IIPTestCheckbox;
         private System.ComponentModel.BackgroundWorker backgroundWorker1;
+        private System.Windows.Forms.ComboBox comboBox3;
     }
 }
 

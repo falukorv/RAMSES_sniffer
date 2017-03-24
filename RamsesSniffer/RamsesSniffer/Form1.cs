@@ -27,6 +27,8 @@ namespace RamsesSniffer
         string TemperatureTest = "";
 
         string RamsesNetworkcardip = "10.101.9.53";
+        static string PusherNetworkcardip = "10.101.9.53";
+        private static IPEndPoint pusherEndPoint;
         //string RamsesNetworkcardip = "192.168.1.102";
 
         //UdpClient for Posnet data
@@ -159,6 +161,8 @@ namespace RamsesSniffer
         // The path to the server that we push data to.
         //private static string serverPath = "http://localhost:8080/czml";
         public static string serverPath = "https://sscflightdata.herokuapp.com/czml";
+
+        private static HttpWebRequest request = (HttpWebRequest)WebRequest.Create(serverPath);
 
         // The object that takes care of the HTTP connection    
         private static HttpClient client = new HttpClient();
@@ -314,6 +318,7 @@ namespace RamsesSniffer
             foreach (string s in net_adapters())
             {
                 comboBox1.Items.Add(s);
+                comboBox3.Items.Add(s);
             }
 
             foreach (string s in modes)
@@ -391,17 +396,20 @@ namespace RamsesSniffer
 
             return values;
         }
-
+        
         private void BindUPD()
         {
             //Take the ip-adress of the selected item in the dropdown box
             RamsesNetworkcardip = comboBox1.SelectedItem.ToString();
+            PusherNetworkcardip = comboBox3.SelectedItem.ToString();
 
             POSNET_udpSock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
 
             try
             {
+                pusherEndPoint = new IPEndPoint(IPAddress.Parse(PusherNetworkcardip), 0);
+
                 //Open the UDP port and listen to IP as specified in config.ini
                 IPEndPoint ipep = new IPEndPoint(IPAddress.Parse(RamsesNetworkcardip), int.Parse(POSNET_UDPport)); //Use the network card with this adress
                 //IPEndPoint ipep = new IPEndPoint(IPAddress.Any, int.Parse(UDPport));
@@ -698,7 +706,7 @@ namespace RamsesSniffer
 
                     testString = ACCx.ToString() + "mG, " + ACCy.ToString() + "mG, " + ACCz.ToString() + "mG" + " " + SepState + ", time:" + missiontime.ToString() + "ms";
 
-                    GLoadsReceived.Add(new GLoads(ACCx, ACCy, ACCz)); //What are the units?
+                    GLoadsReceived.Add(new GLoads((float)ACCx/1000, (float)ACCy/1000, (float)ACCz/1000)); //What are the units?
 
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_THERM)) //If it is a THERM packet. Extract some temperatures maybe?
@@ -1168,69 +1176,7 @@ namespace RamsesSniffer
             }
 
             
-
-            //if (NewGPSpositionsReceived.Count > 0)
-            //{
-            //    GPSUpdated = true;
-            //    add2listBox("GPS updated");
-            //}
-            //else
-            //{
-            //    GPSUpdated = false;
-            //}
-
-            //if (NewAttitudeReceived.Count > 0)
-            //{
-            //    attitudeUpdated = true;
-            //    add2listBox("Attitude updated");
-            //}
-            //else
-            //{
-            //    attitudeUpdated = false;
-            //}
-
-            //if (NewGLoadsReceived.Count > 0)
-            //{
-            //    gLoadsUpdated = true;
-            //    add2listBox("G-loads updated");
-            //}
-            //else
-            //{
-            //    gLoadsUpdated = false;
-            //}
-
-            //if (NewARatesReceived.Count > 0)
-            //{
-            //    aRatesUpdated = true;
-            //    add2listBox("Angular rates updated");
-            //}
-            //else
-            //{
-            //    aRatesUpdated = false;
-            //}
-
-            //if (NewGPS_IIP_Received.Count > 0)
-            //{
-            //    IIPUpdated = true;
-            //    add2listBox("IIP updated");
-            //}
-            //else
-            //{
-            //    IIPUpdated = false;
-            //}
-
-            //if (RTtimestr != oldRTtimestr)
-            //{
-            //    timeUpdated = true;
-            //    add2listBox("Time updated");
-            //    oldRTtimestr = RTtimestr;
-            //}
-            //else
-            //{
-            //    timeUpdated = false;
-            //}
-
-            //bool dataUpdated = GPSUpdated || attitudeUpdated || gLoadsUpdated || aRatesUpdated || IIPUpdated || timeUpdated;
+            
 
             System.Diagnostics.Stopwatch watch_checkTime = new System.Diagnostics.Stopwatch();
 
@@ -1268,19 +1214,10 @@ namespace RamsesSniffer
             watch_checkTime.Stop();
             add2listBox("------------------------------------Time to execute the time check: " + watch_checkTime.ElapsedMilliseconds);
 
-            //if (dataUpdated || GPSpositionsReceived.Count>0 || AttitudeReceived.Count > 0)
-            //{
-
             
-                //writer = new CesiumStreamWriter();
-                System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+            System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 
-                // Resetting the stringwriter
-                //sw = new StringWriter();
-
-                // Resetting the output
-                //output = new CesiumOutputStream(sw);
-           
+         
             // Dates and positions lists, in case we want to sample more data before writing to server.
             List<JulianDate> dates = new List<JulianDate>();
             List<Cartographic> positions = new List<Cartographic>();
@@ -1318,9 +1255,7 @@ namespace RamsesSniffer
 
             if (GPSUpdated)
             {
-                //var watch = System.Diagnostics.Stopwatch.StartNew();
-                //// the code that you want to measure comes here
-
+               
                 try
                 {
                     // Attach a path property to the rocket, enabling us to see the flight trail
@@ -1405,9 +1340,6 @@ namespace RamsesSniffer
                 {
                     try
                     {
-                        // Open the positions packet
-                        //position = packet.OpenPositionProperty();
-                        //add2listBox("Writing position property");
                         // Re-send the last known position if data is missing
                         GPSposition tempPosition = GPSpositionsReceived[GPSpositionsReceived.Count - 1];
                         positions.Add(new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude));
@@ -1418,41 +1350,6 @@ namespace RamsesSniffer
                     {
                         MessageBox.Show("Failed to open and write the rocket position packet: " + except.StackTrace.ToString());
                     }
-
-                    //try
-                    //{
-                    //    position.WriteCartographicDegrees(PositionTimes, positions);
-                    //}
-                    //catch (ArgumentException argE)
-                    //{
-                    //    if (PositionTimes.Count > positions.Count)
-                    //    {
-                    //        PositionTimes = PositionTimes.GetRange(0, positions.Count);
-                    //        position.WriteCartographicDegrees(PositionTimes, positions);
-                    //    }
-                    //    else if (PositionTimes.Count < positions.Count)
-                    //    {
-                    //        positions = positions.GetRange(0, PositionTimes.Count);
-                    //        position.WriteCartographicDegrees(PositionTimes, positions);
-                    //    }
-                    //    else
-                    //    {
-                    //        add2listBox("Failed to correct the argument error: " + argE.StackTrace.ToString());
-                    //    }
-
-
-
-                    //    add2listBox("Exception! " + positions.Count.ToString() + "------" + PositionTimes.Count.ToString());
-                    //}
-                    //try
-                    //{
-                    //    add2listBox("Closing the rocket position packet");
-                    //    position.Close();
-                    //}
-                    //catch (Exception except)
-                    //{
-                    //    add2listBox("Failed to close the rocket position packet: " + except.StackTrace.ToString());
-                    //}
                 }
             }
             watch_GPS.Stop();
@@ -1499,34 +1396,7 @@ namespace RamsesSniffer
 
                     MessageBox.Show("Failed to write positions: " + except.StackTrace.ToString());
                 }
-
-                //try
-                //{
-                //    add2listBox("Closing the rocket position packet");
-                //    position.Close();
-                //}
-                //catch (Exception except)
-                //{
-                //    add2listBox("Failed to close the rocket position packet: " + except.StackTrace.ToString());
-                //}
             }
-
-            
-
-            //add2listBox("oldAttitudeCalculated: " + oldAttitudeDataExists);
-            //if (attitudeUpdated || AttitudeReceived.Count > 0 || oldAttitudeDataExists || (NewGPSpositionsReceived.Count > 0 && GPSpositionsReceived.Count > 0))
-            //{
-            //    try
-            //    {
-            //        // Open the orientation packet
-            //        add2listBox("Opening rocket orientation packet");
-            //        orientation = packet.OpenOrientationProperty();
-            //    }
-            //    catch (Exception except)
-            //    {
-            //        add2listBox("Failed to open the orientation packet: " + except.StackTrace.ToString());
-            //    }
-            //}
 
             System.Diagnostics.Stopwatch watch_attitude = new System.Diagnostics.Stopwatch();
 
@@ -1543,6 +1413,7 @@ namespace RamsesSniffer
                         orientations.Add(tempQuat);
                         oldQuaternion = tempQuat;
                         oldAttitudeDataExists = true;
+                        AttitudeTimes.Add(new JulianDate(DateTime.Now));
                     }
                 }
                 //add2listBox("Pushing new attitude data");
@@ -1565,7 +1436,7 @@ namespace RamsesSniffer
                     if (oldAttitudeDataExists)
                     {
                         orientations.Add(oldQuaternion);
-                        AttitudeTimes.Add(new JulianDate(DateTime.Now).SubtractSeconds(0.5));
+                        AttitudeTimes.Add(new JulianDate(DateTime.Now));
                     }
                     else if (GPSUpdated && GPSStartIndex > 0)
                     {
@@ -1650,44 +1521,6 @@ namespace RamsesSniffer
             watch_attitude.Stop();
             add2listBox("------------------------------------Time to execute attitude write: " + watch_attitude.ElapsedMilliseconds);
 
-            //if (attitudeUpdated || AttitudeReceived.Count > 0 || oldAttitudeDataExists || (NewGPSpositionsReceived.Count > 0 && GPSpositionsReceived.Count > 0))
-            //{
-            //    try
-            //    {
-            //        add2listBox("The orientations: " + orientations[0].ToString());
-            //        orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
-            //    }
-            //    catch (Exception argE)
-            //    {
-            //        if (AttitudeTimes.Count > orientations.Count)
-            //        {
-            //            AttitudeTimes = AttitudeTimes.GetRange(0, orientations.Count);
-            //            orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
-            //        }
-            //        else if (AttitudeTimes.Count < orientations.Count)
-            //        {
-            //            orientations = orientations.GetRange(0, AttitudeTimes.Count);
-            //            orientation.WriteUnitQuaternion(AttitudeTimes, orientations);
-            //        }
-            //        else
-            //        {
-            //            add2listBox("Failed to write the attitudes. " + argE.StackTrace.ToString());
-            //            add2listBox("Failed to write the attitudes. " + orientations.Count);
-            //            add2listBox("Failed to write the attitudes. " + AttitudeTimes.Count);
-            //        }
-            //    }
-
-            //    try
-            //    {
-            //        add2listBox("Closing rocket orientation packet");
-            //        orientation.Close();
-            //    }
-            //    catch (Exception except)
-            //    {
-            //        add2listBox("Failed to close the attitude packet: " + except.StackTrace.ToString());
-            //    }
-            //}
-
             // Write the model packet, and finally close the rocket packet
             try
             {
@@ -1744,9 +1577,7 @@ namespace RamsesSniffer
                 {
                     point.WritePixelSizeProperty(speed);
                 }
-
-                //// outlineWidth will correspond to the time (for now)
-                //point.WriteOutlineWidthProperty(missionSeconds);
+                
                 // The position of the point will correspont to the 3 component g-force
                 if (gLoadsUpdated)
                 {
@@ -1980,19 +1811,6 @@ namespace RamsesSniffer
             watch_postData.Stop();
             add2listBox("------------------------------------Time to post data: " + watch_postData.ElapsedMilliseconds);
 
-            //try
-            //{
-            //    GPSpositionsReceived.AddRange(NewGPSpositionsReceived);
-            //    AttitudeReceived.AddRange(NewAttitudeReceived);
-            //    GLoadsReceived.AddRange(NewGLoadsReceived);
-            //    ARatesReceived.AddRange(NewARatesReceived);
-            //    GPS_IIP_Received.AddRange(NewGPS_IIP_Received);
-            //}
-            //catch (Exception except)
-            //{
-            //    add2listBox("Failed to add new values to the respective arrays: " + except.StackTrace.ToString());
-            //}
-
             try
             {
                 // Resetting some variables
@@ -2012,70 +1830,8 @@ namespace RamsesSniffer
 
             watch_tot.Stop();
             add2listBox("------------------------------------Total time to push data: " + watch_tot.ElapsedMilliseconds);
-
-            //else if (!dataUpdated && GPSpositionsReceived.Count > 0) {
-            //    // Re-send the last known position if data is missing
-            //    GPSposition tempPosition = GPSpositionsReceived[GPSpositionsReceived.Count - 1];
-            //    positions.Add(new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude));
-            //    PositionTimes.Add(new JulianDate(DateTime.Now));
-            //    add2listBox("Pushing old GPS data");
-            //}
-            //else
-            //{
-            //    // If we are not receiving any data, just ping the server to ensure that we have a connection
-
-            //    pingServer();
-            //}
         }
 
-
-
-        /* When no packets are received, just ping the server to make sure that the connection is maintained. */
-        //private void pingServer()
-        //{
-        //    // Resetting the stringwriter
-        //    sw = new StringWriter();
-
-        //    // Resetting the output
-        //    output = new CesiumOutputStream(sw);
-
-        //    // First bracket in the array
-        //    output.WriteStartSequence();
-
-        //    // Add a new packet
-        //    packet = writer.OpenPacket(output);
-
-        //    // Writing the document package, which is the first package that the client must receive
-        //    packet.WriteId("document");
-        //    packet.WriteName("Ping");
-        //    packet.WriteVersion("1.0");
-
-        //    // Close first package
-        //    packet.Close();
-
-
-        //    // Writing the time to a separate packet
-        //    if (RTtimestr != "")
-        //    {
-        //        // Add a new packet
-        //        packet = writer.OpenPacket(output);
-        //        packet.WriteId("pingTimePacket");
-        //        packet.WriteName(RTtimestr);
-        //        // Close package
-        //        packet.Close();
-        //    }
-
-        //    // Closing bracket
-        //    output.WriteEndSequence();
-
-        //    //Populating the byte array with the data written
-        //    byteArray = Encoding.UTF8.GetBytes(sw.ToString());
-
-        //    // Posting the data to the server
-        //    var responseStatus = postData(byteArray);
-
-        //    sw.Close();
-        //}
 
         private string eventStringFromList(double missionTimeInSeconds)
         {
@@ -2413,25 +2169,54 @@ namespace RamsesSniffer
             return resultsList;
         }
 
+        private static IPEndPoint BindIPEndPointCallback(ServicePoint servicePoint, IPEndPoint remoteEndPoint, int retryCount)
+        {
+            if (retryCount < 3)
+                return new IPEndPoint(IPAddress.Parse(PusherNetworkcardip), 0);
+            else
+                return new IPEndPoint(IPAddress.Any, 0);
+        }
+
         /* postData is handles the HTTP request. */
         public static async Task<bool> postData(byte[] data)
         {
             try
             {
+                //request = (HttpWebRequest)WebRequest.Create(serverPath);
+                //request.Method = "POST";
+                //request.ContentType = "application/json";
+                //request.ContentLength = data.Length;
+                //request.ServicePoint.BindIPEndPointDelegate = new BindIPEndPoint(BindIPEndPointCallback);
+                //using (var stream = request.GetRequestStream())
+                //{
+                //    stream.Write(data, 0, data.Length);
+                //}
+
+                //var response = (HttpWebResponse)request.GetResponse();
+
+                //var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+
+                //response.Close();
+                //    return "";
+                //return response.StatusCode.ToString();
+
                 // Convert data to a type that httpClient can handle
                 ByteArrayContent byteContent = new ByteArrayContent(data);
                 byteContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
                 HttpResponseMessage response = await client.PostAsync(serverPath, byteContent);
                 Console.WriteLine(response.Content.ReadAsStringAsync().ToString());
-                // Return the URI of the created resource.
+                //Return the URI of the created resource.
                 return response.IsSuccessStatusCode;
             }
             catch (Exception except)
             {
                 MessageBox.Show("postData failed to send data to the server: " + except.StackTrace.ToString());
+                //return "";
                 return false;
             }
         }
+
+
 
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -2460,9 +2245,16 @@ namespace RamsesSniffer
             }
         }
 
+        private void comboBox3_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
 
         }
+
+       
     }
 }
