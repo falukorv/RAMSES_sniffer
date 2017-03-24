@@ -52,6 +52,7 @@
             this.aRateTestCheckBox = new System.Windows.Forms.CheckBox();
             this.testTypeLabel = new System.Windows.Forms.Label();
             this.IIPTestCheckbox = new System.Windows.Forms.CheckBox();
+            this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -298,6 +299,7 @@
             this.Controls.Add(this.listBox1);
             this.Name = "Form1";
             this.Text = "RAMSES + POSNET Sniffer";
+            this.Load += new System.EventHandler(this.Form1_Load);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
             this.ResumeLayout(false);
@@ -330,6 +332,7 @@
         private System.Windows.Forms.CheckBox aRateTestCheckBox;
         private System.Windows.Forms.Label testTypeLabel;
         private System.Windows.Forms.CheckBox IIPTestCheckbox;
+        private System.ComponentModel.BackgroundWorker backgroundWorker1;
     }
 }
 
