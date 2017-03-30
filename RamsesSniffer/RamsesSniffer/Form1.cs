@@ -166,10 +166,10 @@ namespace RamsesSniffer
         //private static string serverPath = "http://localhost:8080/czml";
         public static string serverPath = "https://sscflightdata.herokuapp.com/czml";
 
-        private static HttpWebRequest request = (HttpWebRequest)WebRequest.Create(serverPath);
+        //private static HttpWebRequest request = (HttpWebRequest)WebRequest.Create(serverPath);
 
         // The object that takes care of the HTTP connection    
-        private static HttpClient client = new HttpClient();
+        //private static HttpClient client = new HttpClient();
         /*--------------------------------------------------------------------*/
         /*--------------------------------------------------------------------*/
 
@@ -871,7 +871,7 @@ namespace RamsesSniffer
                 try
                 {
 
-                    double secondsSince = linecounter * 0.1 - 90;
+                    double secondsSince = linecounter * 0.1;
 
                     double minutes = Math.Truncate(secondsSince / 60);
                     double seconds = Math.Truncate(secondsSince % 60);
@@ -1339,7 +1339,6 @@ namespace RamsesSniffer
                             }
                             
                         }
-                        add2listBox("Alt: " + (tempAlt).ToString());
                         if (maxBackTrack > 0)
                         {
                             Cartographic tempCart = new Cartographic(tempLong / maxBackTrack, tempLat / maxBackTrack, tempAlt / maxBackTrack);
@@ -1355,7 +1354,6 @@ namespace RamsesSniffer
                             oldGPSDataExists = true;
                         }
                         PositionTimes.Add(tempPosition.Time);
-                        add2listBox(tempPosition.Time.ToString());
                     }
                 }
                 catch (Exception except)
@@ -1874,12 +1872,13 @@ namespace RamsesSniffer
             watch_postData.Start();
 
             //add2listBox("Pushing...");
-            new System.Threading.Thread(delegate () {
+            new System.Threading.Thread(delegate ()
+            {
                 var responseStatus = postData(byteArray);
-            }).Start();
-            
+        }).Start();
 
-            watch_postData.Stop();
+
+        watch_postData.Stop();
             add2listBox("------------------------------------Time to post data: " + watch_postData.ElapsedMilliseconds);
 
             try
@@ -2244,11 +2243,11 @@ namespace RamsesSniffer
         {
             try
             {
-                request = (HttpWebRequest)WebRequest.Create(serverPath);
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(serverPath);
                 request.Method = "POST";
                 request.ContentType = "application/json";
                 request.ContentLength = data.Length;
-                //request.ServicePoint.BindIPEndPointDelegate = new BindIPEndPoint(BindIPEndPointCallback);
+                request.ServicePoint.BindIPEndPointDelegate = new BindIPEndPoint(BindIPEndPointCallback);
                 using (var stream = request.GetRequestStream())
                 {
                     stream.Write(data, 0, data.Length);
@@ -2318,6 +2317,9 @@ namespace RamsesSniffer
 
         }
 
-       
+        private void label5_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }

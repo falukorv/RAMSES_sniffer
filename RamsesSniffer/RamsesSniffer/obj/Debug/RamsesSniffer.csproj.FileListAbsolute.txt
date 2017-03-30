@@ -39,11 +39,11 @@ C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\RamsesSniffer.exe.config
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\RamsesSniffer.exe
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\RamsesSniffer.pdb
-C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\CesiumLanguageWriter.pdb
-C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\CesiumLanguageWriter.xml
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\obj\Debug\RamsesSniffer.csprojResolveAssemblyReference.cache
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\obj\Debug\RamsesSniffer.Form1.resources
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\obj\Debug\RamsesSniffer.Properties.Resources.resources
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\obj\Debug\RamsesSniffer.csproj.GenerateResource.Cache
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\obj\Debug\RamsesSniffer.exe
 C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\obj\Debug\RamsesSniffer.pdb
+C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\CesiumLanguageWriter.dll
+C:\Users\FlightData\Documents\GitHub\RAMSES_sniffer\RamsesSniffer\RamsesSniffer\bin\Debug\MathNet.Numerics.dll
