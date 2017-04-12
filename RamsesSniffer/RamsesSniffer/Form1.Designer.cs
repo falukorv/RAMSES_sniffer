@@ -53,8 +53,6 @@
             this.testTypeLabel = new System.Windows.Forms.Label();
             this.IIPTestCheckbox = new System.Windows.Forms.CheckBox();
             this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
-            this.comboBox3 = new System.Windows.Forms.ComboBox();
-            this.label12 = new System.Windows.Forms.Label();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -275,31 +273,11 @@
             this.IIPTestCheckbox.Text = "IIP";
             this.IIPTestCheckbox.UseVisualStyleBackColor = true;
             // 
-            // comboBox3
-            // 
-            this.comboBox3.FormattingEnabled = true;
-            this.comboBox3.Location = new System.Drawing.Point(13, 64);
-            this.comboBox3.Name = "comboBox3";
-            this.comboBox3.Size = new System.Drawing.Size(119, 21);
-            this.comboBox3.TabIndex = 23;
-            this.comboBox3.SelectedIndexChanged += new System.EventHandler(this.comboBox3_SelectedIndexChanged);
-            // 
-            // label12
-            // 
-            this.label12.AutoSize = true;
-            this.label12.Location = new System.Drawing.Point(12, 48);
-            this.label12.Name = "label12";
-            this.label12.Size = new System.Drawing.Size(123, 13);
-            this.label12.TabIndex = 24;
-            this.label12.Text = "Pusher network adapter:";
-            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(966, 616);
-            this.Controls.Add(this.label12);
-            this.Controls.Add(this.comboBox3);
             this.Controls.Add(this.IIPTestCheckbox);
             this.Controls.Add(this.testTypeLabel);
             this.Controls.Add(this.aRateTestCheckBox);
@@ -356,8 +334,6 @@
         private System.Windows.Forms.Label testTypeLabel;
         private System.Windows.Forms.CheckBox IIPTestCheckbox;
         private System.ComponentModel.BackgroundWorker backgroundWorker1;
-        private System.Windows.Forms.ComboBox comboBox3;
-        private System.Windows.Forms.Label label12;
     }
 }
 
