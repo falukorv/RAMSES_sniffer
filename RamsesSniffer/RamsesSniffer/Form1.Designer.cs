@@ -53,6 +53,7 @@
             this.testTypeLabel = new System.Windows.Forms.Label();
             this.IIPTestCheckbox = new System.Windows.Forms.CheckBox();
             this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
+            this.GUIUpdateChecked = new System.Windows.Forms.CheckBox();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -273,11 +274,26 @@
             this.IIPTestCheckbox.Text = "IIP";
             this.IIPTestCheckbox.UseVisualStyleBackColor = true;
             // 
+            // GUIUpdateChecked
+            // 
+            this.GUIUpdateChecked.AutoSize = true;
+            this.GUIUpdateChecked.Checked = true;
+            this.GUIUpdateChecked.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.GUIUpdateChecked.Cursor = System.Windows.Forms.Cursors.Default;
+            this.GUIUpdateChecked.Location = new System.Drawing.Point(15, 49);
+            this.GUIUpdateChecked.Name = "GUIUpdateChecked";
+            this.GUIUpdateChecked.Size = new System.Drawing.Size(83, 17);
+            this.GUIUpdateChecked.TabIndex = 23;
+            this.GUIUpdateChecked.Text = "Update GUI";
+            this.GUIUpdateChecked.UseVisualStyleBackColor = true;
+            this.GUIUpdateChecked.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(966, 616);
+            this.Controls.Add(this.GUIUpdateChecked);
             this.Controls.Add(this.IIPTestCheckbox);
             this.Controls.Add(this.testTypeLabel);
             this.Controls.Add(this.aRateTestCheckBox);
@@ -334,6 +350,7 @@
         private System.Windows.Forms.Label testTypeLabel;
         private System.Windows.Forms.CheckBox IIPTestCheckbox;
         private System.ComponentModel.BackgroundWorker backgroundWorker1;
+        private System.Windows.Forms.CheckBox GUIUpdateChecked;
     }
 }
 

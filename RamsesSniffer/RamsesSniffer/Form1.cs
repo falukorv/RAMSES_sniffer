@@ -91,6 +91,7 @@ namespace RamsesSniffer
         private bool oldGPSDataExists = false;
         private bool oldRealAttitudeDataExists = false;
         private bool oldCalculatedAttitudeDataExists = false;
+        private double oldSpeed = 0; // Used to store the latest calculated speed.
 
         // Check if mission time goes from minus to plus
         private string plusminusTime = "-";
@@ -213,16 +214,18 @@ namespace RamsesSniffer
             public double Longitude = 0;
             public double Latitude = 0;
             public double Altitude = 0;
-            public JulianDate Time = new JulianDate();
+            public JulianDate RealTime = new JulianDate();
+            public JulianDate SimulatedTime = new JulianDate();
             public string RAWmessage = "";
             public int Satellites = 0;
 
-            public GPSposition(double longitude, double latitude, double altitude, JulianDate time, string raw, int satellites)
+            public GPSposition(double longitude, double latitude, double altitude, JulianDate simulatedTime, JulianDate realTime, string raw, int satellites)
             {
                 Longitude = longitude;
                 Latitude = latitude;
                 Altitude = altitude - 330;
-                Time = time;
+                SimulatedTime = simulatedTime;
+                RealTime = realTime;
                 RAWmessage = raw;
                 Satellites = satellites;
             }
@@ -645,14 +648,12 @@ namespace RamsesSniffer
                     altitude = double.Parse(msg.Substring(53, 10), CultureInfo.InvariantCulture);
                     int satellites = Convert.ToInt16(msg.Substring(13, 2));
 
-                    //DateTime timeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
+                    DateTime realTimeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
                     DateTime timeStamp = DateTime.Now;
 
-                    GPSposition p = new GPSposition(longitud, latitude, altitude, new JulianDate(timeStamp), msg, satellites);
+                    GPSposition p = new GPSposition(longitud, latitude, altitude, new JulianDate(timeStamp), new JulianDate(realTimeStamp), msg, satellites);
                     GPSpositionsReceived.Add(p);
 
-                    //NewGPSpositionsReceived.Add(p);
-                    //add2listBox("Number of positions batched: " + GPSpositionsReceived.Count.ToString());
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_GPSIIP_valid))//IIP packet
                 {
@@ -665,7 +666,7 @@ namespace RamsesSniffer
                     //Time to impact, seconds
                     double timeToImpact = double.Parse(msg.Substring(48, 7), CultureInfo.InvariantCulture);
 
-                    //DateTime timeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
+                    DateTime realTimeStamp = new DateTime(currentDate.Year, currentDate.Month, currentDate.Day, Convert.ToInt32(time.Substring(0, 2)), Convert.ToInt32(time.Substring(2, 2)), Convert.ToInt32(time.Substring(4, 2)), 10 * Convert.ToInt32(time.Substring(7, 2)));
                     DateTime timeStamp = DateTime.Now;
 
                     GPS_IIP IIP = new GPS_IIP(longitud, latitude, new JulianDate(timeStamp), msg, timeToImpact);
@@ -687,9 +688,8 @@ namespace RamsesSniffer
 
                     //Do something fancy with the quaternions
                     Attitude at = new Attitude(floatConversion(bquaternion0), floatConversion(bquaternion1), floatConversion(bquaternion2), floatConversion(bquaternion3), new JulianDate(timeStamp));
-                    
+
                     AttitudeReceived.Add(at);
-                    //AttitudeTimes.Add(new JulianDate(DateTime.Now));
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_PCDU)) //If it is a PCDU packet
                 {
@@ -729,7 +729,7 @@ namespace RamsesSniffer
                     GLoadsReceived.Add(new GLoads((float)ACCx/1000, (float)ACCy/1000, (float)ACCz/1000));
 
                     // Scale in order to get degrees per second
-                    double scaleFactor = 0.00037 * 360 / 60;
+                    double scaleFactor = 0.00037 * 360;
                     ARatesReceived.Add(new AngularRates(GyroX* scaleFactor, GyroY * scaleFactor, GyroZ * scaleFactor)); 
 
                 }
@@ -788,7 +788,7 @@ namespace RamsesSniffer
                 if (GPSpositionsReceived.Count > 0)
                 {
                     label3.Text = "GPS: " + GPSpositionsReceived.Count.ToString();
-                    label4.Text = GPSpositionsReceived[GPSpositionsReceived.Count - 1].Time.ToString();
+                    label4.Text = GPSpositionsReceived[GPSpositionsReceived.Count - 1].RealTime.ToString();
 
                     add2listBox(GPSpositionsReceived[GPSpositionsReceived.Count - 1].RAWmessage);
                 }
@@ -834,7 +834,7 @@ namespace RamsesSniffer
 
         private void timer1_Tick(object sender, EventArgs e)
         {
-            if (NewDataFlag == true)
+            if (NewDataFlag == true && GUIUpdateChecked.Checked)
             {
                 UpdateGUI();
                 NewDataFlag = false;
@@ -937,7 +937,7 @@ namespace RamsesSniffer
                         {
                             //add2listBox("Testing GPS");
 
-                            GPSposition p = new GPSposition(testLong, testLat, testAlt, new JulianDate(timeStamp), "msg", 11);
+                            GPSposition p = new GPSposition(testLong, testLat, testAlt, new JulianDate(timeStamp), new JulianDate(timeStamp), "msg", 11);
                             GPSpositionsReceived.Add(p);
 
                             //NewGPSpositionsReceived.Add(p);
@@ -1058,7 +1058,9 @@ namespace RamsesSniffer
         {
             try
             {
-                listBox1.Invoke((MethodInvoker)(() => listBox1.Items.Add(listBoxStr)));
+                if (GUIUpdateChecked.Checked) {
+                        listBox1.Invoke((MethodInvoker)(() => listBox1.Items.Add(listBoxStr)));
+                    }
                 if (listBox1.Items.Count > 500)
                 {
                     listBox1.Items.RemoveAt(0);
@@ -1240,7 +1242,7 @@ namespace RamsesSniffer
 
                         if (GPSUpdated)
                         {
-                            launchTime = NewGPSpositionsReceived[0].Time;
+                            launchTime = NewGPSpositionsReceived[0].SimulatedTime;
                         }
                         else
                         {
@@ -1360,21 +1362,22 @@ namespace RamsesSniffer
                                 }
 
                             }
-                            if (maxBackTrack > 0)
+                            if (maxBackTrack > 0 && tempLong >=0 && tempLat >= 0 && tempAlt >= 0) 
                             {
                                 Cartographic tempCart = new Cartographic(tempLong / maxBackTrack, tempLat / maxBackTrack, tempAlt / maxBackTrack);
                                 positions.Add(tempCart);
                                 oldCartographic = tempCart;
                                 oldGPSDataExists = true;
+                                PositionTimes.Add(tempPosition.SimulatedTime);
                             }
-                            else
+                            else if (tempPosition.Longitude>=0 && tempPosition.Latitude >= 0 && tempPosition.Altitude >= 0)
                             {
                                 Cartographic tempCart = new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude);
                                 positions.Add(tempCart);
                                 oldCartographic = tempCart;
                                 oldGPSDataExists = true;
+                                PositionTimes.Add(tempPosition.SimulatedTime);
                             }
-                            PositionTimes.Add(tempPosition.Time);
                         }
                     }
                     catch (Exception except)
@@ -1401,6 +1404,15 @@ namespace RamsesSniffer
                             Vector<double> lastSamplePos = GPS2cartesian(NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Longitude, NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Latitude, NewGPSpositionsReceived[NewGPSpositionsReceived.Count - 1].Altitude);
                             speed = positions2speed(NewGPSpositionsReceived);
 
+                            if (speed < 0.01)
+                            {
+                                speed = oldSpeed;
+                            }
+                            else
+                            {
+                                oldSpeed = speed;
+                            }
+
                             speedUpdated = true;
                         }
                     }
@@ -1420,6 +1432,15 @@ namespace RamsesSniffer
                                 Vector<double> secondPos = GPS2cartesian(NewGPSpositionsReceived[0].Longitude, NewGPSpositionsReceived[0].Latitude, NewGPSpositionsReceived[0].Altitude);
                                 Vector<double> firstSamplePos = GPS2cartesian(GPSpositionsReceived[GPSpositionsReceived.Count - 1].Longitude, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Latitude, GPSpositionsReceived[GPSpositionsReceived.Count - 1].Altitude);
                                 speed = positions2speed(new List<GPSposition>() { GPSpositionsReceived[GPSpositionsReceived.Count - 1], NewGPSpositionsReceived[0] });
+
+                                if (speed < 0.01)
+                                {
+                                    speed = oldSpeed;
+                                }
+                                else
+                                {
+                                    oldSpeed = speed;
+                                }
 
                                 speedUpdated = true;
                             }
@@ -1518,7 +1539,7 @@ namespace RamsesSniffer
                         if (tempAttitude != null)
                         {
                             UnitQuaternion tempQuat = TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3);
-                            if (tempQuat.W < 2)
+                            if (Math.Abs(tempQuat.W) <= 1 && Math.Abs(tempQuat.X) <= 1 && Math.Abs(tempQuat.Y) <= 1 && Math.Abs(tempQuat.Z) <= 1)
                             {
                                 orientations.Add(tempQuat);
                             }
@@ -1949,7 +1970,7 @@ namespace RamsesSniffer
             }
 
             watch_tot.Stop();
-            add2listBox("------------------------------------Total time to push data: " + watch_tot.ElapsedMilliseconds);
+            //add2listBox("------------------------------------Total time to push data: " + watch_tot.ElapsedMilliseconds);
         }
 
 
@@ -2007,7 +2028,7 @@ namespace RamsesSniffer
             double sRoll = Math.Sin(deg2rad * roll);
 
             // Constructing the DCM from the quaternions
-            qDMC[0, 0] = Math.Pow(q0, 2) + Math.Pow(q1, 2) + Math.Pow(q2, 2) + Math.Pow(q3, 2);
+            qDMC[0, 0] = Math.Pow(q0, 2) + Math.Pow(q1, 2) - Math.Pow(q2, 2) - Math.Pow(q3, 2);
             qDMC[0, 1] = 2 * (q1 * q2 + q0 * q3);
             qDMC[0, 2] = 2 * (q1 * q3 - q0 * q2);
             qDMC[1, 0] = 2 * (q1 * q2 - q0 * q3);
@@ -2071,7 +2092,7 @@ namespace RamsesSniffer
 
             Vector<double> x2 = Vector<double>.Build.Dense(4);
             x2[0] = ECEF2body[2, 0] - ECEF2body[0, 2];
-            x2[1] = ECEF2body[1, 0] + ECEF2body[0, 1];
+            x2[1] = ECEF2body[0, 1] + ECEF2body[1, 0];
             x2[2] = 1 + 2 * ECEF2body[1, 1] - trace;
             x2[3] = ECEF2body[1, 2] + ECEF2body[2, 1];
             vectorList.Add(x2);
@@ -2079,7 +2100,7 @@ namespace RamsesSniffer
             Vector<double> x3 = Vector<double>.Build.Dense(4);
             x3[0] = ECEF2body[0, 1] - ECEF2body[1, 0];
             x3[1] = ECEF2body[2, 0] + ECEF2body[0, 2];
-            x3[2] = ECEF2body[2, 1] + ECEF2body[1, 2];
+            x3[2] = ECEF2body[1, 2] + ECEF2body[2, 1];
             x3[3] = 1 + 2 * ECEF2body[2, 2] - trace;
             vectorList.Add(x3);
 
@@ -2088,15 +2109,14 @@ namespace RamsesSniffer
 
             for (int i = 0; i < vectorList.Count; i++)
             {
-                //Console.WriteLine(vectorList[i].ToString());
-                if (vectorList[i].L2Norm() > maxMagnitude)
+                if (Math.Pow(vectorList[i].L2Norm(),2) > maxMagnitude)
                 {
-                    maxMagnitude = vectorList[i].L2Norm();
+                    maxMagnitude = Math.Pow(vectorList[i].L2Norm(), 2);
                     maxIndex = i;
                 }
             }
-            //add2listBox(vectorList[maxIndex].);
-            return vectorList[maxIndex].Divide(maxMagnitude);
+            add2listBox("3: ----- " + vectorList[maxIndex].Normalize(2).ToString());
+            return vectorList[maxIndex].Normalize(2);
         }
 
         /*  */
@@ -2137,8 +2157,8 @@ namespace RamsesSniffer
                     Vector<double> secondPos = GPS2cartesian(GPSpos[i + 1].Longitude, GPSpos[i + 1].Latitude, GPSpos[i + 1].Altitude);
                     Vector<double> posDiff = secondPos - firstPos;
 
-                    JulianDate firstTime = GPSpos[i].Time;
-                    JulianDate secondTime = GPSpos[i + 1].Time;
+                    JulianDate firstTime = GPSpos[i].RealTime;
+                    JulianDate secondTime = GPSpos[i + 1].RealTime;
                     double timeDiff = secondTime.SecondsDifference(firstTime);
 
                     if (Math.Abs(posDiff.L2Norm()) < 0.001)
@@ -2376,6 +2396,11 @@ namespace RamsesSniffer
         }
 
         private void label5_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
 
         }
