@@ -164,8 +164,8 @@ namespace RamsesSniffer
         private System.Timers.Timer pushTimer;
 
         // The path to the server that we push data to.
-        //private static string serverPath = "http://localhost:8080/czml";
-        public static string serverPath = "https://sscflightdata.herokuapp.com/czml";
+        private static string serverPath = "http://localhost:8080/czml";
+        //public static string serverPath = "https://sscflightdata.herokuapp.com/czml";
 
         //private static HttpWebRequest request = (HttpWebRequest)WebRequest.Create(serverPath);
 
@@ -985,7 +985,7 @@ namespace RamsesSniffer
                 }
                 catch (Exception except)
                 {
-                    //MessageBox.Show("Failed to push test data: " + except.StackTrace.ToString());
+                    MessageBox.Show("Failed to push test data: " + except.StackTrace.ToString());
                 }
 
 
@@ -1012,7 +1012,7 @@ namespace RamsesSniffer
             PacketCesiumWriter packet;
 
             output.PrettyFormatting = true;
-            extrapolationDuration = new Duration(0, 0.001);
+            extrapolationDuration = new Duration(0, 1);
 
             // First bracket in the array
             output.WriteStartSequence();
@@ -1058,12 +1058,13 @@ namespace RamsesSniffer
         {
             try
             {
-                if (GUIUpdateChecked.Checked) {
-                        listBox1.Invoke((MethodInvoker)(() => listBox1.Items.Add(listBoxStr)));
-                    }
+                if (GUIUpdateChecked.Checked)
+                {
+                    listBox1.Invoke((MethodInvoker)(() => listBox1.Items.Add(listBoxStr)));
+                }
                 if (listBox1.Items.Count > 500)
                 {
-                    listBox1.Items.RemoveAt(0);
+                    listBox1.Invoke((MethodInvoker)(() => listBox1.Items.RemoveAt(0)));
                 }
             }
             catch(Exception except)
@@ -1501,13 +1502,14 @@ namespace RamsesSniffer
                     position = packet.OpenPositionProperty();
 
                     // The first position packet states the inter- and extrapolating properties [Do we need this?]
-                    if (firstPositionPacket)
+                    //if (firstPositionPacket)
+                    if(true)
                     {
-                        position.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Hermite);
+                        position.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Linear);
                         position.WriteInterpolationDegree(2);
-                        position.WriteForwardExtrapolationDuration(extrapolationDuration);
-                        position.WriteBackwardExtrapolationDuration(extrapolationDuration);
-                        position.WriteForwardExtrapolationType(CesiumExtrapolationType.Extrapolate);
+                        //position.WriteForwardExtrapolationDuration(extrapolationDuration);
+                        //position.WriteBackwardExtrapolationDuration(extrapolationDuration);
+                        //position.WriteForwardExtrapolationType(CesiumExtrapolationType.None);
                         firstPositionPacket = false;
                     }
 
@@ -1530,24 +1532,115 @@ namespace RamsesSniffer
             if (attitudeUpdated)
             {
                 // INCLUDE A TIMER HERE TO KEEP TRACK ON THE TIME BETWEEN NEW DATA POINTS
-                foreach (Attitude tempAttitude in NewAttitudeReceived)
+                //foreach (Attitude tempAttitude in NewAttitudeReceived)
+                //{
+                //    if (expectedAttitudeFormat == "quaternion")
+                //    {
+                //        if (tempAttitude != null)
+                //        {
+                //            UnitQuaternion tempQuat = TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3);
+                //            if (Math.Abs(tempQuat.W) <= 1 && Math.Abs(tempQuat.X) <= 1 && Math.Abs(tempQuat.Y) <= 1 && Math.Abs(tempQuat.Z) <= 1)
+                //            {
+                //                orientations.Add(tempQuat);
+                //            }
+                //            oldRealQuaternion = tempQuat;
+                //            oldRealAttitudeDataExists = true;
+                //            AttitudeTimes.Add(tempAttitude.Time);
+                //        }
+                //    }
+                //}
+                int medianFrom = 3; // Number of values to take the median from
+                try
                 {
-                    if (expectedAttitudeFormat == "quaternion")
+                    for (int i = 0; i < NewAttitudeReceived.Count; i++)
                     {
-                        //UnitQuaternion tempQuat = new UnitQuaternion(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3);
-                        //UnitQuaternion tempQuat = TH2ECEF(1, 0, 0, 0);
-                        if (tempAttitude != null)
+                        if (expectedAttitudeFormat == "quaternion")
                         {
-                            UnitQuaternion tempQuat = TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3);
-                            if (Math.Abs(tempQuat.W) <= 1 && Math.Abs(tempQuat.X) <= 1 && Math.Abs(tempQuat.Y) <= 1 && Math.Abs(tempQuat.Z) <= 1)
+                            Attitude tempAttitude = NewAttitudeReceived[i];
+
+                            if (tempAttitude != null)
                             {
-                                orientations.Add(tempQuat);
+                                bool medianFilterPossible = OldAttitudeReceived.Count > medianFrom;
+                                int maxBackTrack = medianFilterPossible ? medianFrom : OldAttitudeReceived.Count;
+
+                                if (medianFilterPossible)
+                                {
+                                    Attitude a1 = tempAttitude;
+                                    Attitude a2;
+                                    Attitude a3;
+                                    if (i == 0)
+                                    {
+                                        a2 = OldAttitudeReceived[OldAttitudeReceived.Count - 1];
+                                        a3 = OldAttitudeReceived[OldAttitudeReceived.Count - 2];
+                                    }
+                                    else if (i == 1)
+                                    {
+                                        a2 = NewAttitudeReceived[i - 1];
+                                        a3 = OldAttitudeReceived[OldAttitudeReceived.Count - 1];
+                                    }
+                                    else
+                                    {
+                                        a2 = NewAttitudeReceived[i - 1];
+                                        a3 = NewAttitudeReceived[i - 2];
+                                    }
+
+                                    Attitude[] aArray = new Attitude[3] { a1, a2, a3 };
+                                    int[] indices = new int[3] { 0, 1, 2 };
+
+                                    double[] medianArray = new double[3];
+                                    medianArray[0] = Math.Pow(a1.q0, 2) + Math.Pow(a1.q1, 2) + Math.Pow(a1.q2, 2) + Math.Pow(a1.q3, 2);
+                                    medianArray[1] = Math.Pow(a2.q0, 2) + Math.Pow(a2.q1, 2) + Math.Pow(a2.q2, 2) + Math.Pow(a2.q3, 2);
+                                    medianArray[2] = Math.Pow(a3.q0, 2) + Math.Pow(a3.q1, 2) + Math.Pow(a3.q2, 2) + Math.Pow(a3.q3, 2);
+
+                                    //add2listBox("MedianArray before: " + medianArray[0].ToString() + ' ' + medianArray[1].ToString() + ' ' +  medianArray[2].ToString());
+                                    //add2listBox("IndexArray before: " + indices[0].ToString() + ' ' + indices[1].ToString() + ' ' + indices[2].ToString());
+
+                                    Array.Sort(medianArray, indices);
+
+                                    //add2listBox("MedianArray after: " + medianArray[0].ToString() + ' ' + medianArray[1].ToString() + ' ' + medianArray[2].ToString());
+                                    //add2listBox("IndexArray after: " + indices[0].ToString() + ' ' + indices[1].ToString() + ' ' + indices[2].ToString());
+
+                                    UnitQuaternion tempQuat;
+
+                                    if (Math.Abs(medianArray[indices[1]] - 1) < 0.01)
+                                    {
+                                        Attitude medianAttitude = aArray[indices[1]]; //Selecting the attitude corresponding to the median
+                                        tempQuat = TH2ECEF(medianAttitude.q0, medianAttitude.q1, medianAttitude.q2, medianAttitude.q3);
+                                    }
+                                    else
+                                    {
+                                        tempQuat = oldRealQuaternion;
+                                    }
+
+
+
+                                    if (Math.Abs(tempQuat.W) <= 1 && Math.Abs(tempQuat.X) <= 1 && Math.Abs(tempQuat.Y) <= 1 && Math.Abs(tempQuat.Z) <= 1)
+                                    {
+                                        orientations.Add(tempQuat);
+                                        AttitudeTimes.Add(tempAttitude.Time);
+                                    }
+                                    oldRealQuaternion = tempQuat;
+                                    oldRealAttitudeDataExists = true;
+                                }
+                                else
+                                {
+                                    UnitQuaternion tempQuat = TH2ECEF(tempAttitude.q0, tempAttitude.q1, tempAttitude.q2, tempAttitude.q3);
+                                    if (Math.Abs(tempQuat.W) <= 1 && Math.Abs(tempQuat.X) <= 1 && Math.Abs(tempQuat.Y) <= 1 && Math.Abs(tempQuat.Z) <= 1)
+                                    {
+                                        orientations.Add(tempQuat);
+                                        AttitudeTimes.Add(tempAttitude.Time);
+                                    }
+                                    oldRealQuaternion = tempQuat;
+                                    oldRealAttitudeDataExists = true;
+                                }
                             }
-                            oldRealQuaternion = tempQuat;
-                            oldRealAttitudeDataExists = true;
-                            AttitudeTimes.Add(tempAttitude.Time);
+
                         }
                     }
+                }
+                catch(Exception except)
+                {
+                    MessageBox.Show("Failed to add quaternion: " + except.StackTrace.ToString());
                 }
 
                 //add2listBox("Pushing new attitude data");
@@ -1624,12 +1717,13 @@ namespace RamsesSniffer
                     //add2listBox("Opening rocket orientation packet");
                     orientation = packet.OpenOrientationProperty();
 
-                    if (firstOrientationPacket)
+                    //if (firstOrientationPacket)
+                    if(true)
                     {
-                        orientation.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Hermite);
+                        orientation.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Linear);
                         orientation.WriteInterpolationDegree(1);
-                        orientation.WriteForwardExtrapolationDuration(extrapolationDuration);
-                        orientation.WriteForwardExtrapolationType(CesiumExtrapolationType.Extrapolate);
+                        //orientation.WriteForwardExtrapolationDuration(extrapolationDuration);
+                        //orientation.WriteForwardExtrapolationType(CesiumExtrapolationType.None);
                         firstOrientationPacket = false;
                     }
                 }
@@ -2060,11 +2154,24 @@ namespace RamsesSniffer
             // that describes the orientation of the body axes in the ECEF system
             qDMC.Multiply(ECEF2TH, ECEF2body);
 
-            // Markleys algorithm -------------------
+            bool error = !(ECEF2body[0, 0] < 1 && ECEF2body[0, 1] < 1 && ECEF2body[0, 2] < 1 && ECEF2body[1, 0] < 1 && ECEF2body[1, 1] < 1 && ECEF2body[1, 2] < 1 && ECEF2body[2, 0] < 1 && ECEF2body[2, 1] < 1 && ECEF2body[2, 2] < 1);
 
-            Vector<double> quaternionVector = markley(ECEF2body);
+            if (!error)
+            {
+                Vector<double> quaternionVector = markley(ECEF2body);
+                return new UnitQuaternion(quaternionVector[0], quaternionVector[1], quaternionVector[2], quaternionVector[3]);
+            }
+            else if (oldRealAttitudeDataExists)
+            {
+                return oldRealQuaternion;
+            }
+            else
+            {
+                Vector<double> quaternionVector = markley(ECEF2body);
+                return new UnitQuaternion(quaternionVector[0], quaternionVector[1], quaternionVector[2], quaternionVector[3]);
+            }
 
-            return new UnitQuaternion(quaternionVector[0], quaternionVector[1], quaternionVector[2], quaternionVector[3]);
+            
         }
 
         /* The Markley method converts a DCM to quaternions while maintaining orthonormality. */
@@ -2115,7 +2222,6 @@ namespace RamsesSniffer
                     maxIndex = i;
                 }
             }
-            add2listBox("3: ----- " + vectorList[maxIndex].Normalize(2).ToString());
             return vectorList[maxIndex].Normalize(2);
         }
 
