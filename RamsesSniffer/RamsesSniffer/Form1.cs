@@ -48,10 +48,14 @@ namespace RamsesSniffer
         private Int64 pkgCounter = 0;
 
         private List<GPSposition> GPSpositionsReceived = new List<GPSposition>();
+        private List<GPSposition> OldGPSpositionsReceived = new List<GPSposition>();
         private List<GPS_IIP> GPS_IIP_Received = new List<GPS_IIP>();
         private List<Attitude> AttitudeReceived = new List<Attitude>();
+        private List<Attitude> OldAttitudeReceived = new List<Attitude>();
+        private List<GLoads> OldGLoadsReceived = new List<GLoads>();
         private List<GLoads> GLoadsReceived = new List<GLoads>();
         private List<AngularRates> ARatesReceived = new List<AngularRates>();
+        private List<AngularRates> OldARatesReceived = new List<AngularRates>();
 
         private int maxGPSIndex = 0;
         private int maxGPS_IIP_Index = 0;
@@ -73,14 +77,15 @@ namespace RamsesSniffer
         /*----------------------------Data pusher-----------------------------*/
 
         // WGS ellipsoid data
-        private double eccentricity = 0.081819190842622;
-        private double semiMajorAxis = 6378137;
+        private static double eccentricity = 0.081819190842622;
+        private static double semiMajorAxis = 6378137;
         private Vector<double> xAxis = Vector<double>.Build.DenseOfArray(new double[3] { 1, 0, 0 });
         private Vector<double> yAxis = Vector<double>.Build.DenseOfArray(new double[3] { 0, 1, 0 });
         private Vector<double> zAxis = Vector<double>.Build.DenseOfArray(new double[3] { 0, 0, 1 });
 
         //private List<GPSposition> NewGPSpositionsReceived = new List<GPSposition>();
         private List<JulianDate> PositionTimes = new List<JulianDate>();
+        private JulianDate oldPositionTime = new JulianDate();
         //private List<Attitude> NewAttitudeReceived = new List<Attitude>();
         private List<JulianDate> AttitudeTimes = new List<JulianDate>();
         //private List<GLoads> NewGLoadsReceived = new List<GLoads>();
@@ -151,11 +156,16 @@ namespace RamsesSniffer
         private bool launched = false;
         private string oldRTtimestr = "";
 
+        private bool firstGpsDataProcessed = false;
+        private JulianDate baseTimeTimeStamp; // Base time with redards to the time stamped time
+        private JulianDate baseTimeNow; // Base time with redargs to current system time at the time of creating the baseTimeTimeStamp
+
+
         // The duration for how long we are extrapolating
         private Duration extrapolationDuration;
 
         // Constant used for converting degrees to radians
-        private double deg2rad = Math.PI / 180;
+        private static double deg2rad = Math.PI / 180;
 
         // An array in which we store the data as bytes
         private byte[] byteArray;
@@ -229,6 +239,11 @@ namespace RamsesSniffer
                 RAWmessage = raw;
                 Satellites = satellites;
             }
+
+            public Vector<double> toCartesian()
+            {
+                return GPS2cartesian(Longitude, Latitude, Altitude);
+            }
         }
 
         class GPS_IIP
@@ -252,7 +267,6 @@ namespace RamsesSniffer
             {
                 return new Cartographic(Longitude, Latitude, 0);
             }
-
         }
 
         class Attitude
@@ -406,12 +420,12 @@ namespace RamsesSniffer
 
             return values;
         }
-        
+
         private void BindUPD()
         {
             //Take the ip-adress of the selected item in the dropdown box
             RamsesNetworkcardip = comboBox1.SelectedItem.ToString();
-            
+
 
             POSNET_udpSock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
@@ -544,7 +558,7 @@ namespace RamsesSniffer
                     StringBuilder sb = new StringBuilder(RTtimestr);
                     sb[sb.Length - 2] = ' ';
                     RTtimestr = sb.ToString();
-                    
+
 
                     //RTtimestr = "-11:22:33";
                 }
@@ -654,6 +668,17 @@ namespace RamsesSniffer
                     GPSposition p = new GPSposition(longitud, latitude, altitude, new JulianDate(timeStamp), new JulianDate(realTimeStamp), msg, satellites);
                     GPSpositionsReceived.Add(p);
 
+                    if (!firstGpsDataProcessed)
+                    {
+                        baseTimeTimeStamp = new JulianDate(realTimeStamp);
+                        baseTimeNow = new JulianDate(DateTime.Now);
+                        firstGpsDataProcessed = true;
+                    }
+                    else
+                    {
+                        //add2listBox("Time: " + time);
+                    }
+
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_GPSIIP_valid))//IIP packet
                 {
@@ -684,12 +709,17 @@ namespace RamsesSniffer
                     Array.Copy(RAMSES_buffer, 49 + 38, bquaternion2, 0, 4);
                     Array.Copy(RAMSES_buffer, 49 + 42, bquaternion3, 0, 4);
 
-                    DateTime timeStamp = DateTime.Now;
+                    JulianDate now = new JulianDate(DateTime.Now);
+                    //add2listBox("Time diff: " + now.SecondsDifference(baseTime).ToString());
 
-                    //Do something fancy with the quaternions
-                    Attitude at = new Attitude(floatConversion(bquaternion0), floatConversion(bquaternion1), floatConversion(bquaternion2), floatConversion(bquaternion3), new JulianDate(timeStamp));
+                    if (firstGpsDataProcessed)
+                    {
+                        JulianDate timeStamp = baseTimeTimeStamp.AddSeconds(baseTimeNow.SecondsDifference(now));
+                        Attitude at = new Attitude(floatConversion(bquaternion0), floatConversion(bquaternion1), floatConversion(bquaternion2), floatConversion(bquaternion3), timeStamp);
 
-                    AttitudeReceived.Add(at);
+                        AttitudeReceived.Add(at);
+                        //add2listBox("Attitude time: " + at.Time.ToDateTime().ToString());
+                    }
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_PCDU)) //If it is a PCDU packet
                 {
@@ -726,11 +756,11 @@ namespace RamsesSniffer
 
                     testString = ACCx.ToString() + "mG, " + ACCy.ToString() + "mG, " + ACCz.ToString() + "mG" + " " + SepState + ", time:" + missiontime.ToString() + "ms";
 
-                    GLoadsReceived.Add(new GLoads((float)ACCx/1000, (float)ACCy/1000, (float)ACCz/1000));
+                    GLoadsReceived.Add(new GLoads((float)ACCx / 1000, (float)ACCy / 1000, (float)ACCz / 1000));
 
                     // Scale in order to get degrees per second
                     double scaleFactor = 0.00037 * 360;
-                    ARatesReceived.Add(new AngularRates(GyroX* scaleFactor, GyroY * scaleFactor, GyroZ * scaleFactor)); 
+                    ARatesReceived.Add(new AngularRates(GyroX * scaleFactor, GyroY * scaleFactor, GyroZ * scaleFactor));
 
                 }
                 else if (Packetmatch(RAMSES_buffer, PacketID_THERM)) //If it is a THERM packet. Extract some temperatures maybe?
@@ -746,9 +776,10 @@ namespace RamsesSniffer
 
 
             }
-            catch
+            catch (Exception except)
             {
                 add2listBox("error!");
+                //MessageBox.Show(except.StackTrace.ToString());
                 //RAMSES decompile error
             }
 
@@ -788,7 +819,7 @@ namespace RamsesSniffer
                 if (GPSpositionsReceived.Count > 0)
                 {
                     label3.Text = "GPS: " + GPSpositionsReceived.Count.ToString();
-                    label4.Text = GPSpositionsReceived[GPSpositionsReceived.Count - 1].RealTime.ToString();
+                    label4.Text = GPSpositionsReceived[GPSpositionsReceived.Count - 1].RealTime.ToDateTime().ToString();
 
                     add2listBox(GPSpositionsReceived[GPSpositionsReceived.Count - 1].RAWmessage);
                 }
@@ -825,7 +856,8 @@ namespace RamsesSniffer
                 {
                     listBox1.SelectedIndex = listBox1.Items.Count - 1;
                 }
-            }catch(Exception except)
+            }
+            catch (Exception except)
             {
                 MessageBox.Show("Failed to update GUI: " + except.StackTrace.ToString());
             }
@@ -885,7 +917,7 @@ namespace RamsesSniffer
                 try
                 {
 
-                    double secondsSince = linecounter * 0.1-50;
+                    double secondsSince = linecounter * 0.1 - 50;
 
                     double minutes = Math.Truncate(secondsSince / 60);
                     double seconds = Math.Truncate(secondsSince % 60);
@@ -1012,7 +1044,7 @@ namespace RamsesSniffer
             PacketCesiumWriter packet;
 
             output.PrettyFormatting = true;
-            extrapolationDuration = new Duration(0, 1);
+            extrapolationDuration = new Duration(0, 600);
 
             // First bracket in the array
             output.WriteStartSequence();
@@ -1067,7 +1099,7 @@ namespace RamsesSniffer
                     listBox1.Invoke((MethodInvoker)(() => listBox1.Items.RemoveAt(0)));
                 }
             }
-            catch(Exception except)
+            catch (Exception except)
             {
                 MessageBox.Show("Writing to listBox1 failed: " + except.StackTrace.ToString());
             }
@@ -1091,7 +1123,8 @@ namespace RamsesSniffer
                 output = new CesiumOutputStream(sw);
                 writer = new CesiumStreamWriter();
                 packet = new PacketCesiumWriter();
-            }catch(Exception except)
+            }
+            catch (Exception except)
             {
                 MessageBox.Show("Failed to assign writers: " + except.StackTrace.ToString());
             }
@@ -1113,7 +1146,7 @@ namespace RamsesSniffer
             watch_listBox.Stop();
             //add2listBox("------------------------------------Time of listBox execution: " + watch_listBox.ElapsedMilliseconds.ToString());
 
-           
+
 
 
 
@@ -1137,13 +1170,11 @@ namespace RamsesSniffer
             int ARateEndIndex = 0;
 
             List<GPSposition> NewGPSpositionsReceived = new List<GPSposition>();
-            List<GPSposition> OldGPSpositionsReceived = new List<GPSposition>();
             List<Attitude> NewAttitudeReceived = new List<Attitude>();
-            List<Attitude> OldAttitudeReceived = new List<Attitude>();
             List<GLoads> NewGLoadsReceived = new List<GLoads>();
             List<AngularRates> NewARatesReceived = new List<AngularRates>();
 
-            
+
 
             string expectedAttitudeFormat = "quaternion"; // Maybe add this to the user interface?
 
@@ -1166,7 +1197,7 @@ namespace RamsesSniffer
                     NewGPSpositionsReceived = GPSpositionsReceived.GetRange(GPSStartIndex, GPSEndIndex - GPSStartIndex + 1);
                     OldGPSpositionsReceived = GPSpositionsReceived.GetRange(0, GPSStartIndex);
                 }
-               
+
 
                 if (AttitudeReceived.Count > maxAttitudeIndex + 1)
                 {
@@ -1185,6 +1216,7 @@ namespace RamsesSniffer
                     GLoadEndIndex = GLoadsReceived.Count - 1;
                     maxGLoadIndex = GLoadEndIndex;
                     NewGLoadsReceived = GLoadsReceived.GetRange(GLoadStartIndex, GLoadEndIndex - GLoadStartIndex + 1);
+                    OldGLoadsReceived = GLoadsReceived.GetRange(0, GLoadStartIndex);
                 }
 
                 if (ARatesReceived.Count > maxARateIndex + 1)
@@ -1194,6 +1226,7 @@ namespace RamsesSniffer
                     ARateEndIndex = ARatesReceived.Count - 1;
                     maxARateIndex = ARateEndIndex;
                     NewARatesReceived = ARatesReceived.GetRange(ARateStartIndex, ARateEndIndex - ARateStartIndex + 1);
+                    OldARatesReceived = ARatesReceived.GetRange(0, ARateStartIndex);
                 }
 
                 if (GPS_IIP_Received.Count > maxGPS_IIP_Index + 1)
@@ -1201,7 +1234,7 @@ namespace RamsesSniffer
                     IIPUpdated = true;
                     //GPS_IIP_StartIndex = maxGPS_IIP_Index;
                     //GPS_IIP_EndIndex = GPS_IIP_Received.Count - 1;
-                    maxGPS_IIP_Index = GPS_IIP_Received.Count-1;
+                    maxGPS_IIP_Index = GPS_IIP_Received.Count - 1;
                 }
 
                 if (RTtimestr != oldRTtimestr)
@@ -1210,12 +1243,14 @@ namespace RamsesSniffer
                     //add2listBox("Time updated");
                     oldRTtimestr = RTtimestr;
                 }
-            }catch(Exception except){
+            }
+            catch (Exception except)
+            {
                 MessageBox.Show("Failed to check update properties: " + except.StackTrace.ToString());
             }
 
-            
-            
+
+
 
             System.Diagnostics.Stopwatch watch_checkTime = new System.Diagnostics.Stopwatch();
 
@@ -1262,18 +1297,17 @@ namespace RamsesSniffer
             watch_checkTime.Stop();
             //add2listBox("------------------------------------Time to execute the time check: " + watch_checkTime.ElapsedMilliseconds);
 
-            
+
             System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 
-         
+
             // Dates and positions lists, in case we want to sample more data before writing to server.
             List<JulianDate> dates = new List<JulianDate>();
             List<Cartographic> positions = new List<Cartographic>();
             List<UnitQuaternion> orientations = new List<UnitQuaternion>();
             List<double> speeds = new List<double>();
             double speed = 0;
-            Cartesian gLoads = new Cartesian();
-            Cartesian aRates = new Cartesian();
+            
 
             // Trying to write the start sequence
             try
@@ -1305,13 +1339,13 @@ namespace RamsesSniffer
             {
                 MessageBox.Show("Failed to open the rocket packet: " + except.StackTrace.ToString());
             }
-            
+
             System.Diagnostics.Stopwatch watch_GPS = new System.Diagnostics.Stopwatch();
             watch_GPS.Start();
 
             if (GPSUpdated)
             {
-               
+
                 try
                 {
                     if (launched)
@@ -1341,45 +1375,119 @@ namespace RamsesSniffer
                     int maxBackTrack = OldGPSpositionsReceived.Count > maximumBackTrack ? maximumBackTrack : OldGPSpositionsReceived.Count;
                     try
                     {
-                        for (int iPos = 0; iPos < NewGPSpositionsReceived.Count; iPos++)
+                        List<GPSposition> checkedPositions = new List<GPSposition>();
+                        int medianFrom = 3; // Number of values to take the median from
+                        for (int i = 0; i < NewGPSpositionsReceived.Count; i++)
                         {
-                            GPSposition tempPosition = NewGPSpositionsReceived[iPos];
-                            double tempLong = 0;
-                            double tempLat = 0;
-                            double tempAlt = 0;
-                            for (int i = 0; i < maxBackTrack; i++)
+                            GPSposition tempPosition = NewGPSpositionsReceived[i];
+                            Vector<double> tempCartesian = tempPosition.toCartesian();
+
+                            bool medianFilterPossible = OldGPSpositionsReceived.Count > medianFrom;
+                            int maxMedianBackTrack = medianFilterPossible ? medianFrom : OldAttitudeReceived.Count;
+
+                            if (medianFilterPossible)
                             {
-                                if (i > iPos)
+                                GPSposition pos1 = tempPosition;
+                                GPSposition pos2;
+                                GPSposition pos3;
+
+                                Vector<double> p1 = tempCartesian;
+                                Vector<double> p2;
+                                Vector<double> p3;
+
+                                if (i == 0)
                                 {
-                                    tempLong += OldGPSpositionsReceived[OldGPSpositionsReceived.Count + iPos - i].Longitude;
-                                    tempLat += OldGPSpositionsReceived[OldGPSpositionsReceived.Count + iPos - i].Latitude;
-                                    tempAlt += OldGPSpositionsReceived[OldGPSpositionsReceived.Count + iPos - i].Altitude;
+                                    pos2 = OldGPSpositionsReceived[OldGPSpositionsReceived.Count - 1];
+                                    pos3 = OldGPSpositionsReceived[OldGPSpositionsReceived.Count - 2];
+                                }
+                                else if (i == 1)
+                                {
+                                    pos2 = NewGPSpositionsReceived[i - 1];
+                                    pos3 = OldGPSpositionsReceived[OldGPSpositionsReceived.Count - 1];
                                 }
                                 else
                                 {
-                                    tempLong += NewGPSpositionsReceived[iPos - i].Longitude;
-                                    tempLat += NewGPSpositionsReceived[iPos - i].Latitude;
-                                    tempAlt += NewGPSpositionsReceived[iPos - i].Altitude;
+                                    pos2 = NewGPSpositionsReceived[i - 1];
+                                    pos3 = NewGPSpositionsReceived[i - 2];
                                 }
 
-                            }
-                            if (maxBackTrack > 0 && tempLong >=0 && tempLat >= 0 && tempAlt >= 0) 
-                            {
-                                Cartographic tempCart = new Cartographic(tempLong / maxBackTrack, tempLat / maxBackTrack, tempAlt / maxBackTrack);
-                                positions.Add(tempCart);
+                                p2 = pos2.toCartesian();
+                                p3 = pos3.toCartesian();
+
+                                GPSposition[] pArray = new GPSposition[3] { pos1, pos2, pos3 };
+                                int[] indices = new int[3] { 0, 1, 2 };
+
+                                double[] medianArray = new double[3];
+                                medianArray[0] = Math.Pow(p1.L2Norm(), 2);
+                                medianArray[1] = Math.Pow(p2.L2Norm(), 2);
+                                medianArray[2] = Math.Pow(p3.L2Norm(), 2);
+
+                                Array.Sort(medianArray, indices);
+
+                                checkedPositions.Add(pArray[indices[1]]);
+                                Cartographic tempCart = new Cartographic(pArray[indices[1]].Longitude, pArray[indices[1]].Latitude, pArray[indices[1]].Altitude);
+                                //positions.Add(tempCart);
+                                //PositionTimes.Add(pArray[indices[1]].RealTime);
+                                positions.Add(new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude));
+                                PositionTimes.Add(tempPosition.RealTime);
+
                                 oldCartographic = tempCart;
                                 oldGPSDataExists = true;
-                                PositionTimes.Add(tempPosition.SimulatedTime);
                             }
-                            else if (tempPosition.Longitude>=0 && tempPosition.Latitude >= 0 && tempPosition.Altitude >= 0)
+                            else
                             {
                                 Cartographic tempCart = new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude);
                                 positions.Add(tempCart);
+                                PositionTimes.Add(tempPosition.RealTime);
+
                                 oldCartographic = tempCart;
                                 oldGPSDataExists = true;
-                                PositionTimes.Add(tempPosition.SimulatedTime);
                             }
                         }
+
+
+                        //for (int iPos = 0; iPos < checkedPositions.Count; iPos++)
+                        //{
+                        //    GPSposition tempPosition = checkedPositions[iPos];
+                        //    double tempLong = 0;
+                        //    double tempLat = 0;
+                        //    double tempAlt = 0;
+                        //    for (int i = 0; i < maxBackTrack; i++)
+                        //    {
+                        //        if (i > iPos)
+                        //        {
+                        //            tempLong += OldGPSpositionsReceived[OldGPSpositionsReceived.Count + iPos - i].Longitude;
+                        //            tempLat += OldGPSpositionsReceived[OldGPSpositionsReceived.Count + iPos - i].Latitude;
+                        //            tempAlt += OldGPSpositionsReceived[OldGPSpositionsReceived.Count + iPos - i].Altitude;
+                        //        }
+                        //        else
+                        //        {
+                        //            tempLong += checkedPositions[iPos - i].Longitude;
+                        //            tempLat += checkedPositions[iPos - i].Latitude;
+                        //            tempAlt += checkedPositions[iPos - i].Altitude;
+                        //        }
+
+                        //    }
+                        //    if (maxBackTrack > 0 && tempLong >= 0 && tempLat >= 0 && tempAlt >= 0)
+                        //    {
+                        //        Cartographic tempCart = new Cartographic(tempLong / maxBackTrack, tempLat / maxBackTrack, tempAlt / maxBackTrack);
+                        //        positions.Add(tempCart);
+                        //        oldCartographic = tempCart;
+                        //        oldGPSDataExists = true;
+                        //        //PositionTimes.Add(tempPosition.SimulatedTime);
+                        //        PositionTimes.Add(tempPosition.RealTime);
+                        //    }
+                        //    else if (tempPosition.Longitude >= 0 && tempPosition.Latitude >= 0 && tempPosition.Altitude >= 0)
+                        //    {
+                        //        Cartographic tempCart = new Cartographic(tempPosition.Longitude, tempPosition.Latitude, tempPosition.Altitude);
+                        //        positions.Add(tempCart);
+                        //        oldCartographic = tempCart;
+                        //        oldGPSDataExists = true;
+                        //        //PositionTimes.Add(tempPosition.SimulatedTime);
+                        //        PositionTimes.Add(tempPosition.RealTime);
+                        //        //oldPositionTime = tempPosition.RealTime;
+                        //    }
+                        //}
                     }
                     catch (Exception except)
                     {
@@ -1392,7 +1500,8 @@ namespace RamsesSniffer
                     positions.Add(tempCart);
                     oldCartographic = tempCart;
                     oldGPSDataExists = true;
-                    PositionTimes.Add(new JulianDate(DateTime.Now));
+                    PositionTimes.Add(NewGPSpositionsReceived[0].RealTime);
+                    //oldPositionTime = NewGPSpositionsReceived[0].RealTime;
                 }
 
                 if (NewGPSpositionsReceived.Count > 1)
@@ -1467,14 +1576,17 @@ namespace RamsesSniffer
                 {
                     try
                     {
-                        // Re-send the last known position if data is missing
-                        positions.Add(oldCartographic);
-                        PositionTimes.Add(new JulianDate(DateTime.Now));
-                        //add2listBox("Pushing old GPS data");
+                        //// Re-send the last known position if data is missing
+                        //positions.Add(oldCartographic);
+                        //////PositionTimes.Add(new JulianDate(DateTime.Now));
+                        ////oldPositionTime = oldPositionTime.AddSeconds(0.5);
+                        //PositionTimes.Add(baseTimeTimeStamp.AddSeconds(baseTimeNow.SecondsDifference(new JulianDate(DateTime.Now))));
+                        ////add2listBox("Pushing old GPS data");
                     }
                     catch (Exception except)
                     {
                         MessageBox.Show("Failed to open and write the rocket position packet: " + except.StackTrace.ToString());
+                        MessageBox.Show(OldGPSpositionsReceived.Count.ToString());
                     }
                 }
             }
@@ -1503,13 +1615,13 @@ namespace RamsesSniffer
 
                     // The first position packet states the inter- and extrapolating properties [Do we need this?]
                     //if (firstPositionPacket)
-                    if(true)
+                    if (true)
                     {
                         position.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Linear);
-                        position.WriteInterpolationDegree(2);
-                        //position.WriteForwardExtrapolationDuration(extrapolationDuration);
-                        //position.WriteBackwardExtrapolationDuration(extrapolationDuration);
-                        //position.WriteForwardExtrapolationType(CesiumExtrapolationType.None);
+                        position.WriteInterpolationDegree(1);
+                        position.WriteForwardExtrapolationDuration(extrapolationDuration);
+                        position.WriteBackwardExtrapolationDuration(extrapolationDuration);
+                        position.WriteForwardExtrapolationType(CesiumExtrapolationType.Hold);
                         firstPositionPacket = false;
                     }
 
@@ -1638,7 +1750,7 @@ namespace RamsesSniffer
                         }
                     }
                 }
-                catch(Exception except)
+                catch (Exception except)
                 {
                     MessageBox.Show("Failed to add quaternion: " + except.StackTrace.ToString());
                 }
@@ -1649,7 +1761,7 @@ namespace RamsesSniffer
             {
                 //add2listBox("Pushing old data");
                 orientations.Add(oldRealQuaternion);
-                AttitudeTimes.Add(new JulianDate(DateTime.Now));
+                AttitudeTimes.Add(baseTimeTimeStamp.AddSeconds(baseTimeNow.SecondsDifference(new JulianDate(DateTime.Now))));
             }
             else if (GPSUpdated && GPSStartIndex > 0)
             {
@@ -1679,7 +1791,7 @@ namespace RamsesSniffer
                         if (tempQuat.W < 2)
                         {
                             orientations.Add(tempQuat);
-                            AttitudeTimes.Add(new JulianDate(DateTime.Now));
+                            AttitudeTimes.Add(baseTimeTimeStamp.AddSeconds(baseTimeNow.SecondsDifference(new JulianDate(DateTime.Now))));
                         }
                     }
                 }
@@ -1692,7 +1804,7 @@ namespace RamsesSniffer
             {
                 //add2listBox("Pushing old attitude data");
                 orientations.Add(oldCalculatedQuaternion);
-                AttitudeTimes.Add(new JulianDate(DateTime.Now));
+                AttitudeTimes.Add(baseTimeTimeStamp.AddSeconds(baseTimeNow.SecondsDifference(new JulianDate(DateTime.Now))));
             }
 
             if (orientations.Count > 0)
@@ -1710,7 +1822,7 @@ namespace RamsesSniffer
             if (orientations.Count > 0)
             {
                 // The first orientation packet states the inter- and extrapolating properties
-                
+
                 try
                 {
                     // Open the orientation packet
@@ -1718,12 +1830,12 @@ namespace RamsesSniffer
                     orientation = packet.OpenOrientationProperty();
 
                     //if (firstOrientationPacket)
-                    if(true)
+                    if (true)
                     {
                         orientation.WriteInterpolationAlgorithm(CesiumInterpolationAlgorithm.Linear);
                         orientation.WriteInterpolationDegree(1);
-                        //orientation.WriteForwardExtrapolationDuration(extrapolationDuration);
-                        //orientation.WriteForwardExtrapolationType(CesiumExtrapolationType.None);
+                        orientation.WriteForwardExtrapolationDuration(extrapolationDuration);
+                        orientation.WriteForwardExtrapolationType(CesiumExtrapolationType.Hold);
                         firstOrientationPacket = false;
                     }
                 }
@@ -1813,12 +1925,145 @@ namespace RamsesSniffer
                 {
                     point.WritePixelSizeProperty(speed);
                 }
-                
+
                 // The position of the point will correspont to the 3 component g-force
                 if (gLoadsUpdated)
                 {
                     gLoadPacket = packet.OpenPositionProperty();
-                    gLoads = NewGLoadsReceived[NewGLoadsReceived.Count - 1].toCartesian();
+
+                    Cartesian gLoads;
+                    //aRates = NewARatesReceived[NewARatesReceived.Count - 1].toCartesian();
+
+                    int medianFrom = 3;
+
+                    int newGLoads = NewGLoadsReceived.Count;
+                    GLoads tempGLoads = NewGLoadsReceived[newGLoads - 1];
+
+                    //double aRateX = tempARate.aRateX;
+                    //double aRateY = tempARate.aRateY;
+                    //double aRateZ = tempARate.aRateZ;
+
+                    int maximumBackTrack = 5;
+                    int maxBackTrack = OldGLoadsReceived.Count > maximumBackTrack ? maximumBackTrack : OldGLoadsReceived.Count;
+
+                    bool medianFilterPossible = OldARatesReceived.Count > medianFrom;
+
+                    int iPos = newGLoads - 1;
+                    //for (int iPos = 0; iPos < newARates; iPos++)
+                    //{
+                    //AngularRates tempARate = NewARatesReceived[iPos];
+                    double tempAx = 0;
+                    double tempAy = 0;
+                    double tempAz = 0;
+                    for (int i = 0; i < maxBackTrack; i++)
+                    {
+                        if (i > iPos)
+                        {
+                            tempAx += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gx;
+                            tempAy += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gy;
+                            tempAz += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gz;
+                        }
+                        else
+                        {
+                            tempAx += NewGLoadsReceived[iPos - i].Gx;
+                            tempAy += NewGLoadsReceived[iPos - i].Gy;
+                            tempAz += NewGLoadsReceived[iPos - i].Gz;
+                        }
+
+                    }
+
+                    if (maxBackTrack > 0)
+                    {
+                        gLoads = new Cartesian(tempAx / maxBackTrack, tempAy / maxBackTrack, tempAz / maxBackTrack);
+                    }
+                    else
+                    {
+                        gLoads = tempGLoads.toCartesian();
+                    }
+
+                    //int medianFrom = 3;
+
+                    //int newGLoads = NewGLoadsReceived.Count;
+                    //GLoads tempGLoad = NewGLoadsReceived[newGLoads - 1];
+
+                    //double gLoadX = tempGLoad.Gx;
+                    //double gLoadY = tempGLoad.Gy;
+                    //double gLoadZ = tempGLoad.Gz;
+
+                    //Cartesian gLoads;
+
+                    //bool medianFilterPossible = OldGLoadsReceived.Count > medianFrom;
+
+
+                    //if (medianFilterPossible)
+                    //{
+                    //    double Gx1 = gLoadX;
+                    //    double Gx2;
+                    //    double Gx3;
+
+                    //    double Gy1 = gLoadY;
+                    //    double Gy2;
+                    //    double Gy3;
+
+                    //    double Gz1 = gLoadZ;
+                    //    double Gz2;
+                    //    double Gz3;
+
+                    //    if (newGLoads == 1)
+                    //    {
+                    //        Gx2 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gx;
+                    //        Gx3 = OldGLoadsReceived[OldGLoadsReceived.Count - 2].Gx;
+
+                    //        Gy2 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gy;
+                    //        Gy3 = OldGLoadsReceived[OldGLoadsReceived.Count - 2].Gy;
+
+                    //        Gz2 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gz;
+                    //        Gz3 = OldGLoadsReceived[OldGLoadsReceived.Count - 2].Gz;
+                    //    }
+                    //    else if (newGLoads == 2)
+                    //    {
+                    //        Gx2 = NewGLoadsReceived[newGLoads - 2].Gx;
+                    //        Gx3 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gx;
+
+                    //        Gy2 = NewGLoadsReceived[newGLoads - 2].Gy;
+                    //        Gy3 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gy;
+
+                    //        Gz2 = NewGLoadsReceived[newGLoads - 2].Gz;
+                    //        Gz3 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gz;
+                    //    }
+                    //    else
+                    //    {
+                    //        Gx2 = NewGLoadsReceived[newGLoads - 2].Gx;
+                    //        Gx3 = NewGLoadsReceived[newGLoads - 3].Gx;
+
+                    //        Gy2 = NewGLoadsReceived[newGLoads - 2].Gy;
+                    //        Gy3 = NewGLoadsReceived[newGLoads - 3].Gy;
+
+                    //        Gz2 = NewGLoadsReceived[newGLoads - 2].Gz;
+                    //        Gz3 = NewGLoadsReceived[newGLoads - 3].Gz;
+                    //    }
+
+
+
+                    //    double[] GxArray = new double[3] { Gx1, Gx2, Gx3 };
+                    //    double[] GyArray = new double[3] { Gy1, Gy2, Gy3 };
+                    //    double[] GzArray = new double[3] { Gz1, Gz2, Gz3 };
+                    //    int[] Gxindices = new int[3] { 0, 1, 2 };
+                    //    int[] Gyindices = new int[3] { 0, 1, 2 };
+                    //    int[] Gzindices = new int[3] { 0, 1, 2 };
+
+                    //    double[] medianArray = new double[3];
+
+                    //    Array.Sort(GxArray, Gxindices);
+                    //    Array.Sort(GyArray, Gyindices);
+                    //    Array.Sort(GzArray, Gzindices);
+
+                    //    gLoads = new Cartesian(GxArray[2], GyArray[2], GzArray[2]);
+                    //}
+                    //else
+                    //{
+                    //    gLoads = tempGLoad.toCartesian();
+                    //}
                     gLoadPacket.WriteCartesian(gLoads);
                     gLoadPacket.Close();
                 }
@@ -1889,13 +2134,130 @@ namespace RamsesSniffer
                     try
                     {
                         aRatePacket = packet.OpenPositionProperty();
-                        //if (launched)
+
+                        Cartesian aRates;
+                        //aRates = NewARatesReceived[NewARatesReceived.Count - 1].toCartesian();
+
+                        int medianFrom = 3;
+
+                        int newARates = NewARatesReceived.Count;
+                        AngularRates tempARate = NewARatesReceived[newARates - 1];
+
+                        //double aRateX = tempARate.aRateX;
+                        //double aRateY = tempARate.aRateY;
+                        //double aRateZ = tempARate.aRateZ;
+
+                        int maximumBackTrack = 5;
+                        int maxBackTrack = OldARatesReceived.Count > maximumBackTrack ? maximumBackTrack : OldARatesReceived.Count;
+
+                        bool medianFilterPossible = OldARatesReceived.Count > medianFrom;
+
+                        int iPos = newARates - 1;
+                        //for (int iPos = 0; iPos < newARates; iPos++)
                         //{
-                        aRates = NewARatesReceived[NewARatesReceived.Count - 1].toCartesian();
+                            //AngularRates tempARate = NewARatesReceived[iPos];
+                            double tempAx = 0;
+                            double tempAy = 0;
+                            double tempAz = 0;
+                            for (int i = 0; i < maxBackTrack; i++)
+                            {
+                                if (i > iPos)
+                                {
+                                    tempAx += OldARatesReceived[OldARatesReceived.Count + iPos - i].aRateX;
+                                    tempAy += OldARatesReceived[OldARatesReceived.Count + iPos - i].aRateY;
+                                    tempAz += OldARatesReceived[OldARatesReceived.Count + iPos - i].aRateZ;
+                                }
+                                else
+                                {
+                                    tempAx += NewARatesReceived[iPos - i].aRateX;
+                                    tempAy += NewARatesReceived[iPos - i].aRateY;
+                                    tempAz += NewARatesReceived[iPos - i].aRateZ;
+                                }
+
+                            }
+
+                        if (maxBackTrack > 0)
+                        {
+                            aRates = new Cartesian(tempAx / maxBackTrack, tempAy / maxBackTrack, tempAz / maxBackTrack);
+                        }
+                        else{
+                            aRates = tempARate.toCartesian();
+                        }
+
+
                         //}
-                        //else {
-                        //    aRates = new Cartesian(0, 0, 0);
+
+
+                        //if (medianFilterPossible)
+                        //{
+                        //    double Gx1 = aRateX;
+                        //    double Gx2;
+                        //    double Gx3;
+
+                        //    double Gy1 = aRateY;
+                        //    double Gy2;
+                        //    double Gy3;
+
+                        //    double Gz1 = aRateZ;
+                        //    double Gz2;
+                        //    double Gz3;
+
+                        //    if (newARates == 1)
+                        //    {
+                        //        Gx2 = OldARatesReceived[OldARatesReceived.Count - 1].aRateX;
+                        //        Gx3 = OldARatesReceived[OldARatesReceived.Count - 2].aRateX;
+
+                        //        Gy2 = OldARatesReceived[OldARatesReceived.Count - 1].aRateY;
+                        //        Gy3 = OldARatesReceived[OldARatesReceived.Count - 2].aRateY;
+
+                        //        Gz2 = OldARatesReceived[OldARatesReceived.Count - 1].aRateZ;
+                        //        Gz3 = OldARatesReceived[OldARatesReceived.Count - 2].aRateZ;
+                        //    }
+                        //    else if (newARates == 2)
+                        //    {
+                        //        Gx2 = NewARatesReceived[newARates - 2].aRateX;
+                        //        Gx3 = OldARatesReceived[OldGLoadsReceived.Count - 1].aRateX;
+
+                        //        Gy2 = NewARatesReceived[newARates - 2].aRateY;
+                        //        Gy3 = OldARatesReceived[OldGLoadsReceived.Count - 1].aRateY;
+
+                        //        Gz2 = NewARatesReceived[newARates - 2].aRateZ;
+                        //        Gz3 = OldARatesReceived[OldGLoadsReceived.Count - 1].aRateZ;
+                        //    }
+                        //    else
+                        //    {
+                        //        Gx2 = NewARatesReceived[newARates - 2].aRateX;
+                        //        Gx3 = NewARatesReceived[newARates - 3].aRateX;
+
+                        //        Gy2 = NewARatesReceived[newARates - 2].aRateY;
+                        //        Gy3 = NewARatesReceived[newARates - 3].aRateY;
+
+                        //        Gz2 = NewARatesReceived[newARates - 2].aRateZ;
+                        //        Gz3 = NewARatesReceived[newARates - 3].aRateZ;
+                        //    }
+
+
+
+                        //    double[] GxArray = new double[3] { Gx1, Gx2, Gx3 };
+                        //    double[] GyArray = new double[3] { Gy1, Gy2, Gy3 };
+                        //    double[] GzArray = new double[3] { Gz1, Gz2, Gz3 };
+                        //    int[] Gxindices = new int[3] { 0, 1, 2 };
+                        //    int[] Gyindices = new int[3] { 0, 1, 2 };
+                        //    int[] Gzindices = new int[3] { 0, 1, 2 };
+
+                        //    double[] medianArray = new double[3];
+
+                        //    Array.Sort(GxArray, Gxindices);
+                        //    Array.Sort(GyArray, Gyindices);
+                        //    Array.Sort(GzArray, Gzindices);
+
+                        //    aRates = new Cartesian(GxArray[2], GyArray[2], GzArray[2]);
                         //}
+                        //else
+                        //{
+                        //    aRates = tempARate.toCartesian();
+                        //}
+
                         aRatePacket.WriteCartesian(aRates);
                         aRatePacket.Close();
                     }
@@ -2067,7 +2429,6 @@ namespace RamsesSniffer
             //add2listBox("------------------------------------Total time to push data: " + watch_tot.ElapsedMilliseconds);
         }
 
-
         private string eventStringFromList(double missionTimeInSeconds)
         {
             int maxIndex = 0;
@@ -2171,7 +2532,7 @@ namespace RamsesSniffer
                 return new UnitQuaternion(quaternionVector[0], quaternionVector[1], quaternionVector[2], quaternionVector[3]);
             }
 
-            
+
         }
 
         /* The Markley method converts a DCM to quaternions while maintaining orthonormality. */
@@ -2216,7 +2577,7 @@ namespace RamsesSniffer
 
             for (int i = 0; i < vectorList.Count; i++)
             {
-                if (Math.Pow(vectorList[i].L2Norm(),2) > maxMagnitude)
+                if (Math.Pow(vectorList[i].L2Norm(), 2) > maxMagnitude)
                 {
                     maxMagnitude = Math.Pow(vectorList[i].L2Norm(), 2);
                     maxIndex = i;
@@ -2226,7 +2587,7 @@ namespace RamsesSniffer
         }
 
         /*  */
-        private Vector<double> GPS2cartesian(double longitude, double latitude, double height)
+        private static Vector<double> GPS2cartesian(double longitude, double latitude, double height)
         {
             // Empty vector to store the results in
             Vector<double> cartesianPos = Vector<double>.Build.Dense(3);
@@ -2493,7 +2854,7 @@ namespace RamsesSniffer
 
         private void comboBox3_SelectedIndexChanged(object sender, EventArgs e)
         {
-            
+
         }
 
         private void Form1_Load(object sender, EventArgs e)
