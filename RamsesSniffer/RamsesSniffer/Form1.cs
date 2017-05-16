@@ -1943,127 +1943,46 @@ namespace RamsesSniffer
                     //double aRateY = tempARate.aRateY;
                     //double aRateZ = tempARate.aRateZ;
 
-                    int maximumBackTrack = 5;
-                    int maxBackTrack = OldGLoadsReceived.Count > maximumBackTrack ? maximumBackTrack : OldGLoadsReceived.Count;
+                    //int maximumBackTrack = 5;
+                    //int maxBackTrack = OldGLoadsReceived.Count > maximumBackTrack ? maximumBackTrack : OldGLoadsReceived.Count;
 
-                    bool medianFilterPossible = OldARatesReceived.Count > medianFrom;
+                    //bool medianFilterPossible = OldARatesReceived.Count > medianFrom;
 
-                    int iPos = newGLoads - 1;
-                    //for (int iPos = 0; iPos < newARates; iPos++)
+                    //int iPos = newGLoads - 1;
+                    ////for (int iPos = 0; iPos < newARates; iPos++)
+                    ////{
+                    ////AngularRates tempARate = NewARatesReceived[iPos];
+                    //double tempAx = 0;
+                    //double tempAy = 0;
+                    //double tempAz = 0;
+                    //for (int i = 0; i < maxBackTrack; i++)
                     //{
-                    //AngularRates tempARate = NewARatesReceived[iPos];
-                    double tempAx = 0;
-                    double tempAy = 0;
-                    double tempAz = 0;
-                    for (int i = 0; i < maxBackTrack; i++)
-                    {
-                        if (i > iPos)
-                        {
-                            tempAx += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gx;
-                            tempAy += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gy;
-                            tempAz += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gz;
-                        }
-                        else
-                        {
-                            tempAx += NewGLoadsReceived[iPos - i].Gx;
-                            tempAy += NewGLoadsReceived[iPos - i].Gy;
-                            tempAz += NewGLoadsReceived[iPos - i].Gz;
-                        }
-
-                    }
-
-                    if (maxBackTrack > 0)
-                    {
-                        gLoads = new Cartesian(tempAx / maxBackTrack, tempAy / maxBackTrack, tempAz / maxBackTrack);
-                    }
-                    else
-                    {
-                        gLoads = tempGLoads.toCartesian();
-                    }
-
-                    //int medianFrom = 3;
-
-                    //int newGLoads = NewGLoadsReceived.Count;
-                    //GLoads tempGLoad = NewGLoadsReceived[newGLoads - 1];
-
-                    //double gLoadX = tempGLoad.Gx;
-                    //double gLoadY = tempGLoad.Gy;
-                    //double gLoadZ = tempGLoad.Gz;
-
-                    //Cartesian gLoads;
-
-                    //bool medianFilterPossible = OldGLoadsReceived.Count > medianFrom;
-
-
-                    //if (medianFilterPossible)
-                    //{
-                    //    double Gx1 = gLoadX;
-                    //    double Gx2;
-                    //    double Gx3;
-
-                    //    double Gy1 = gLoadY;
-                    //    double Gy2;
-                    //    double Gy3;
-
-                    //    double Gz1 = gLoadZ;
-                    //    double Gz2;
-                    //    double Gz3;
-
-                    //    if (newGLoads == 1)
+                    //    if (i > iPos)
                     //    {
-                    //        Gx2 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gx;
-                    //        Gx3 = OldGLoadsReceived[OldGLoadsReceived.Count - 2].Gx;
-
-                    //        Gy2 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gy;
-                    //        Gy3 = OldGLoadsReceived[OldGLoadsReceived.Count - 2].Gy;
-
-                    //        Gz2 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gz;
-                    //        Gz3 = OldGLoadsReceived[OldGLoadsReceived.Count - 2].Gz;
-                    //    }
-                    //    else if (newGLoads == 2)
-                    //    {
-                    //        Gx2 = NewGLoadsReceived[newGLoads - 2].Gx;
-                    //        Gx3 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gx;
-
-                    //        Gy2 = NewGLoadsReceived[newGLoads - 2].Gy;
-                    //        Gy3 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gy;
-
-                    //        Gz2 = NewGLoadsReceived[newGLoads - 2].Gz;
-                    //        Gz3 = OldGLoadsReceived[OldGLoadsReceived.Count - 1].Gz;
+                    //        tempAx += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gx;
+                    //        tempAy += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gy;
+                    //        tempAz += OldGLoadsReceived[OldGLoadsReceived.Count + iPos - i].Gz;
                     //    }
                     //    else
                     //    {
-                    //        Gx2 = NewGLoadsReceived[newGLoads - 2].Gx;
-                    //        Gx3 = NewGLoadsReceived[newGLoads - 3].Gx;
-
-                    //        Gy2 = NewGLoadsReceived[newGLoads - 2].Gy;
-                    //        Gy3 = NewGLoadsReceived[newGLoads - 3].Gy;
-
-                    //        Gz2 = NewGLoadsReceived[newGLoads - 2].Gz;
-                    //        Gz3 = NewGLoadsReceived[newGLoads - 3].Gz;
+                    //        tempAx += NewGLoadsReceived[iPos - i].Gx;
+                    //        tempAy += NewGLoadsReceived[iPos - i].Gy;
+                    //        tempAz += NewGLoadsReceived[iPos - i].Gz;
                     //    }
 
+                    //}
 
-
-                    //    double[] GxArray = new double[3] { Gx1, Gx2, Gx3 };
-                    //    double[] GyArray = new double[3] { Gy1, Gy2, Gy3 };
-                    //    double[] GzArray = new double[3] { Gz1, Gz2, Gz3 };
-                    //    int[] Gxindices = new int[3] { 0, 1, 2 };
-                    //    int[] Gyindices = new int[3] { 0, 1, 2 };
-                    //    int[] Gzindices = new int[3] { 0, 1, 2 };
-
-                    //    double[] medianArray = new double[3];
-
-                    //    Array.Sort(GxArray, Gxindices);
-                    //    Array.Sort(GyArray, Gyindices);
-                    //    Array.Sort(GzArray, Gzindices);
-
-                    //    gLoads = new Cartesian(GxArray[2], GyArray[2], GzArray[2]);
+                    //if (maxBackTrack > 0)
+                    //{
+                    //    gLoads = new Cartesian(tempAx / maxBackTrack, tempAy / maxBackTrack, tempAz / maxBackTrack);
                     //}
                     //else
                     //{
-                    //    gLoads = tempGLoad.toCartesian();
+                    //    gLoads = tempGLoads.toCartesian();
                     //}
+
+                    gLoads = tempGLoads.toCartesian();
+
                     gLoadPacket.WriteCartesian(gLoads);
                     gLoadPacket.Close();
                 }
