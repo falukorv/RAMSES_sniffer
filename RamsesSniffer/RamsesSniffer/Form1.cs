@@ -1737,13 +1737,13 @@ namespace RamsesSniffer
                         else if (newARates == 2)
                         {
                             Gx2 = NewARatesReceived[newARates - 2].aRateX;
-                            Gx3 = OldARatesReceived[OldGLoadsReceived.Count - 1].aRateX;
+                            Gx3 = OldARatesReceived[OldARatesReceived.Count - 1].aRateX;
 
                             Gy2 = NewARatesReceived[newARates - 2].aRateY;
-                            Gy3 = OldARatesReceived[OldGLoadsReceived.Count - 1].aRateY;
+                            Gy3 = OldARatesReceived[OldARatesReceived.Count - 1].aRateY;
 
                             Gz2 = NewARatesReceived[newARates - 2].aRateZ;
-                            Gz3 = OldARatesReceived[OldGLoadsReceived.Count - 1].aRateZ;
+                            Gz3 = OldARatesReceived[OldARatesReceived.Count - 1].aRateZ;
                         }
                         else
                         {
