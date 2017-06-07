@@ -129,8 +129,8 @@ namespace RamsesSniffer
         private bool firstGpsDataProcessed = false;
 
         // The path to the server which we push data to.
-        private static string serverPath = "http://localhost:8080/czml";
-        //public static string serverPath = "https://sscflightdata.herokuapp.com/czml";
+        //private static string serverPath = "http://localhost:8080/czml";
+        public static string serverPath = "https://sscflightdata.herokuapp.com/czml";
 
         /*--------------------------------------------------------------------*/
         /*--------------------------------------------------------------------*/
